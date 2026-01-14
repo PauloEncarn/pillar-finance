@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --- TABELA DE USUÁRIOS ---
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // Vamos guardar o hash da senha aqui
+  avatarUrl String?  // Foto de perfil (opcional)
+  role      String   @default("USER") // 'ADMIN' ou 'USER'
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos: Um usuário tem vários lançamentos e logs
+  lancamentos Lancamento[]
+  logs        LogSistema[]
+
+  @@map("users")
+}
+
+// --- TABELA DE LANÇAMENTOS ---
+model Lancamento {
+  id        String   @id @default(uuid())
+  descricao String
+  valor     Decimal  @db.Decimal(10, 2)
+  tipo      String   // ENTRADA ou SAIDA
+  categoria String   // FIXO ou VARIAVEL
+  status    String   // PENDENTE ou PAGO
+  data      String   // YYYY-MM-DD
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Dono do Lançamento
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("lancamentos")
+}
+
+// --- TABELA DE AUDITORIA ---
+model LogSistema {
+  id          String   @id @default(uuid())
+  acao        String   // INSERT, UPDATE, DELETE, LOGIN
+  detalhe     String
+  modulo      String
+  dataHora    DateTime @default(now())
+
+  // Quem fez a ação?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("logs_sistema")
+}

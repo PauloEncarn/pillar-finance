@@ -1,0 +1,81 @@
+'use client';
+
+import Link from 'next/link';
+import Image from 'next/image'; 
+import { usePathname } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  Wallet, 
+  Settings, 
+  Truck, 
+  Wrench,
+  LogOut,
+  Users,
+  FileText
+} from 'lucide-react';
+
+export function Sidebar() {
+  const pathname = usePathname();
+
+  const menuItems = [
+    { icon: LayoutDashboard, label: 'Painel Geral', href: '/' },
+    { icon: Wallet, label: 'Financeiro', href: '/lancamentos' },
+    { icon: Users, label: 'Funcionários', href: '/funcionarios' },
+    { icon: Truck, label: 'Frota', href: '/frota' },
+    { icon: FileText, label: 'Relatórios', href: '/relatorios' },
+    { icon: Settings, label: 'Configurações', href: '/configuracoes' },
+  ];
+
+  return (
+    <aside className="fixed left-0 top-0 h-screen w-64 bg-[#0f172a] text-white flex flex-col border-r border-slate-800 shadow-2xl z-50">
+      
+      {/* --- ÁREA DA LOGO (Fundo Branco Total para sumir bordas) --- */}
+      <div className="h-32 bg-white flex items-center justify-center overflow-hidden relative border-b-4 border-blue-900">
+        <div className="relative w-full h-full">
+          <Image 
+            src="/logo.jpg" 
+            alt="M. Montranel Logo"
+            fill
+            className="object-contain scale-90" // Ajuste o scale se cortar muito (ex: scale-75 ou scale-100)
+            priority
+          />
+        </div>
+      </div>
+
+      {/* --- NAVEGAÇÃO --- */}
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
+        <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">
+          Operacional
+        </p>
+        
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href;
+
+          return (
+            <Link 
+              key={item.href} 
+              href={item.href}
+              className={`flex items-center gap-3 px-4 py-3.5 text-sm font-medium rounded-lg transition-all group ${
+                isActive 
+                  ? 'bg-blue-900 text-white shadow-md shadow-black/40 translate-x-1 border-l-4 border-blue-500' 
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white hover:translate-x-1'
+              }`}
+            >
+              <Icon size={20} className={`${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-white'} transition-colors`} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* --- RODAPÉ --- */}
+      <div className="p-4 border-t border-slate-800 bg-[#0B1221]">
+        <button className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all text-sm font-medium">
+          <LogOut size={20} />
+          Sair
+        </button>
+      </div>
+    </aside>
+  );
+}
