@@ -3,55 +3,35 @@ import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request) {
-  console.log("PRISMA OBJECT:", prisma); 
-  console.log("TABELA USER:", prisma.user);
   try {
     const { name, email, password } = await request.json();
 
-    // 1. Validar se preencheu tudo
-    if (!name || !email || !password) {
+    if (!email || !password || !name) {
       return NextResponse.json({ error: 'Preencha todos os campos.' }, { status: 400 });
     }
 
-    // 2. Verificar se usuário já existe
-    const userExists = await prisma.user.findUnique({
-      where: { email }
-    });
-
+    // Verifica se já existe
+    const userExists = await prisma.user.findUnique({ where: { email } });
     if (userExists) {
-      return NextResponse.json({ error: 'Este e-mail já está em uso.' }, { status: 400 });
+      return NextResponse.json({ error: 'E-mail já cadastrado.' }, { status: 400 });
     }
 
-    // 3. Criptografar a senha (Hash)
+    // Criptografa a senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 4. Criar o usuário no Banco
-    const newUser = await prisma.user.create({
+    // Cria o usuário
+    const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        role: 'ADMIN' // O primeiro usuário será Admin
+        role: 'USER' // Padrão
       }
     });
 
-    // 5. Criar um Log de Auditoria (Opcional, mas chique)
-    await prisma.logSistema.create({
-      data: {
-        acao: 'REGISTER',
-        detalhe: `Novo usuário cadastrado: ${email}`,
-        modulo: 'Autenticação',
-        userId: newUser.id,
-      }
-    });
-
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Usuário criado com sucesso!' 
-    }, { status: 201 });
+    return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error("Erro no registro:", error);
-    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+    return NextResponse.json({ error: 'Erro ao criar conta.' }, { status: 500 });
   }
 }

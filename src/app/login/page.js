@@ -1,148 +1,202 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { Lock, Mail, User, Loader2, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 
 export default function Login() {
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  // Estados da Tela
+  const [mode, setMode] = useState('login'); // 'login' ou 'register'
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
+  const [successUser, setSuccessUser] = useState(null);
 
- // ... imports
+  // Dados do Formulário
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: ''
+  });
 
-  // DENTRO DO COMPONENTE LOGIN:
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
+    setErro('');
+    setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      if (mode === 'login') {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formData.email, password: formData.password }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao realizar login');
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao entrar.');
+        localStorage.setItem('pillar-token', data.token);
+        localStorage.setItem('pillar-user', JSON.stringify(data.user));
+
+        // Ativa animação de sucesso
+        setSuccessUser(data.user);
+
+        setTimeout(() => {
+          router.push('/');
+          router.refresh();
+        }, 2500);
+
+      } else {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao cadastrar');
+
+        alert('Conta enviada para aprovação!');
+        setMode('login');
+        setLoading(false);
       }
-
-      // SALVA O USUÁRIO REAL NO NAVEGADOR
-      localStorage.setItem('pillar-user', JSON.stringify(data.user));
-      
-      // Redireciona
-      router.push('/');
-
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      setErro(err.message);
+      setLoading(false);
     }
   };
 
-
-  return (
-    <div className="min-h-screen flex bg-slate-100">
-      
-      {/* --- LADO ESQUERDO (Painel Industrial) --- */}
-      <div className="hidden lg:flex w-5/12 bg-[#0f172a] relative flex-col justify-center overflow-hidden border-r-4 border-blue-900">
-        
-        {/* Fundo texturizado sutil */}
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:20px_20px]"></div>
-
-        {/* FAIXA BRANCA DA LOGO (Solução para bordas) */}
-        <div className="relative z-10 bg-white w-full py-12 pl-12 pr-4 shadow-2xl my-8 border-l-8 border-blue-600">
-          <div className="relative w-full h-32">
-             <Image 
-                src="/logo.jpg" 
-                alt="M. Montranel Logo"
-                fill
-                className="object-contain object-left" // Joga a logo para a esquerda
-                priority
-             />
+  // --- TELA DE ANIMAÇÃO DE SUCESSO ---
+  if (successUser) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-900 px-4">
+        <div className="flex flex-col items-center animate-in zoom-in duration-700">
+          <div className="relative w-32 h-32 mb-6">
+            <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
+            <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center">
+              {successUser.avatarUrl ? (
+                <Image src={successUser.avatarUrl} alt="Avatar" fill className="object-cover" unoptimized />
+              ) : (
+                <span className="text-4xl font-bold text-white">{successUser.name.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="absolute bottom-0 right-0 bg-emerald-500 text-white p-2 rounded-full border-4 border-slate-900">
+              <CheckCircle size={20} />
+            </div>
           </div>
-        </div>
-
-        <div className="px-12 relative z-10 text-white mt-4">
-          <h2 className="text-3xl font-bold uppercase tracking-tight">
-            Gestão Integrada
-          </h2>
-          <p className="text-slate-400 mt-2 text-lg">
-            Sistema de controle de montagem e logística.
-          </p>
-        </div>
-
-        <div className="absolute bottom-8 left-12 text-xs text-slate-500 uppercase tracking-widest">
-          © 2026 M. Montranel Ltda.
+          <h2 className="text-2xl font-bold text-white mb-2">Bem-vindo, {successUser.name.split(' ')[0]}!</h2>
+          <p className="text-slate-400">Carregando seu painel...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* --- LADO DIREITO (Formulário Limpo) --- */}
-      <div className="w-full lg:w-7/12 flex items-center justify-center p-8">
-        <div className="w-full max-w-md bg-white p-10 rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100">
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-900 px-4">
+      <div className="w-full max-w-md">
+        
+        {/* CARD DE LOGIN (O MODELO QUE VOCÊ PEDIU) */}
+        <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl space-y-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">
           
-          <div className="mb-8 border-b border-slate-100 pb-6">
-            <h2 className="text-2xl font-bold text-slate-800">Acesso Restrito</h2>
-            <p className="text-slate-500 text-sm mt-1">Identifique-se para acessar o painel operacional.</p>
+          {/* LOGO E TÍTULO */}
+          <div className="flex flex-col items-center text-center">
+            <div className="relative w-48 h-24 mb-2">
+              <Image src="/logo.jpg" alt="Logo" fill className="object-contain" priority />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+              {mode === 'login' ? 'Pillar IT Management' : 'Criar Conta'}
+            </h2>
+            <p className="text-slate-500 text-sm font-medium">
+              {mode === 'login' ? 'Gestão Financeira e Operacional' : 'Solicite seu acesso ao sistema'}
+            </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Usuário / Email</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail size={18} />
+          {/* MENSAGEM DE ERRO */}
+          {erro && (
+            <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl flex items-center gap-3 text-sm animate-bounce">
+              <AlertCircle size={20} />
+              <span className="font-bold">{erro}</span>
+            </div>
+          )}
+
+          {/* FORMULÁRIO */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {mode === 'register' && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-3.5 text-slate-400" size={20} />
+                  <input
+                    type="text"
+                    required
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  />
                 </div>
-                <input 
-                  type="email" 
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Corporativo</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-3.5 text-slate-400" size={20} />
+                <input
+                  type="email"
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent transition-all"
-                  placeholder="admin@montranel.com.br"
+                  placeholder="exemplo@pillarit.com.br"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Senha de Acesso</label>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sua Senha</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Lock size={18} />
-                </div>
-                <input 
-                  type={showPassword ? "text" : "password"}
+                <Lock className="absolute left-4 top-3.5 text-slate-400" size={20} />
+                <input
+                  type="password"
                   required
-                  className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent transition-all"
-                  placeholder="••••••"
+                  placeholder="••••••••"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
               </div>
             </div>
 
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              className="w-full bg-[#0f172a] text-white py-4 rounded-lg font-bold hover:bg-blue-900 transition-all shadow-lg flex justify-center items-center gap-2 mt-4"
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-900 hover:bg-blue-800 text-white py-4 rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
             >
-              {isLoading ? 'Verificando...' : 'ENTRAR'} <ArrowRight size={18} />
+              {loading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>{mode === 'login' ? 'Entrar no Sistema' : 'Cadastrar agora'}</>
+              )}
             </button>
           </form>
+
+          {/* ALTERNAR ENTRE LOGIN E REGISTRO */}
+          <div className="pt-6 border-t border-slate-100 text-center">
+            <button 
+              onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+              className="text-slate-500 text-xs font-medium hover:text-blue-600 transition-colors"
+            >
+              {mode === 'login' ? 'Não tem uma conta? ' : 'Já possui cadastro? '}
+              <span className="font-bold underline">{mode === 'login' ? 'Criar conta' : 'Fazer Login'}</span>
+            </button>
+          </div>
         </div>
+
+        <p className="mt-8 text-center text-slate-500 text-[10px] uppercase font-bold tracking-[0.2em]">
+          &copy; 2026 M. Montranel - Todos os direitos reservados
+        </p>
       </div>
     </div>
   );

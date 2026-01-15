@@ -1,48 +1,53 @@
 'use client';
 
+import { memo } from 'react'; // 1. Importação para performance
 import Link from 'next/link';
 import Image from 'next/image'; 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Wallet, 
   Settings, 
-  Truck, 
-  Wrench,
   LogOut,
-  Users,
-  FileText
+  FileSpreadsheet
 } from 'lucide-react';
 
-export function Sidebar() {
+// 2. Mudamos de "export function" para apenas "function" interna
+function SidebarBase() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    localStorage.removeItem('pillar-user');
+    localStorage.removeItem('pillar-token');
+    router.push('/login');
+  };
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Painel Geral', href: '/' },
-    { icon: Wallet, label: 'Financeiro', href: '/lancamentos' },
-    { icon: Users, label: 'Funcionários', href: '/funcionarios' },
-    { icon: Truck, label: 'Frota', href: '/frota' },
-    { icon: FileText, label: 'Relatórios', href: '/relatorios' },
+    { icon: Wallet, label: 'Gestão Financeira', href: '/lancamentos' },
+    { icon: FileSpreadsheet, label: 'Relatórios', href: '/relatorios' },
     { icon: Settings, label: 'Configurações', href: '/configuracoes' },
   ];
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-[#0f172a] text-white flex flex-col border-r border-slate-800 shadow-2xl z-50">
       
-      {/* --- ÁREA DA LOGO (Fundo Branco Total para sumir bordas) --- */}
+      {/* ÁREA DA LOGO */}
       <div className="h-32 bg-white flex items-center justify-center overflow-hidden relative border-b-4 border-blue-900">
         <div className="relative w-full h-full">
+          {/* Certifique-se de ter a imagem logo.jpg na pasta public */}
           <Image 
             src="/logo.jpg" 
             alt="M. Montranel Logo"
             fill
-            className="object-contain scale-90" // Ajuste o scale se cortar muito (ex: scale-75 ou scale-100)
+            className="object-contain scale-90"
             priority
           />
         </div>
       </div>
 
-      {/* --- NAVEGAÇÃO --- */}
+      {/* NAVEGAÇÃO */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
         <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">
           Operacional
@@ -69,13 +74,20 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* --- RODAPÉ --- */}
+      {/* RODAPÉ */}
       <div className="p-4 border-t border-slate-800 bg-[#0B1221]">
-        <button className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all text-sm font-medium">
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-3 w-full text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all text-sm font-medium"
+        >
           <LogOut size={20} />
-          Sair
+          Sair do Sistema
         </button>
       </div>
     </aside>
   );
 }
+
+// 3. Exportamos a versão OTIMIZADA (Memorizada)
+// O React só vai renderizar isso de novo se algo drástico mudar na estrutura, ignorando atualizações de dados do dashboard.
+export const Sidebar = memo(SidebarBase);

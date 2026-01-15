@@ -2,31 +2,31 @@
 
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar"; 
+import { Sidebar } from "@/components/Sidebar";
 import { usePathname } from 'next/navigation';
 
 const inter = Inter({ subsets: ["latin"] });
 
-// IMPORTANTE: Esta função precisa ser 'export default'
 export default function RootLayout({ children }) {
   const pathname = usePathname();
-  
-  // Lista de páginas onde a Sidebar NÃO deve aparecer
-  const isLoginPage = pathname === '/login' || pathname === '/register';
+  const isLoginPage = pathname === '/login';
 
   return (
     <html lang="pt-BR">
       <body className={`${inter.className} bg-slate-50 text-slate-900`}>
-        
-        {/* Renderiza a Sidebar apenas se NÃO for página de login/registro */}
-        {!isLoginPage && <Sidebar />}
-        
-        {/* Ajusta a margem do conteúdo principal */}
-        <main className={`${!isLoginPage ? 'ml-64' : 'w-full'} min-h-screen transition-all duration-300`}>
-          <div className={!isLoginPage ? "p-8 max-w-7xl mx-auto" : ""}>
-             {children}
-          </div>
-        </main>
+        <div className="min-h-screen flex">
+          
+          {/* Sidebar só aparece se NÃO for login */}
+          {!isLoginPage && <Sidebar />}
+
+          {/* Se for login: Ocupa 100% da largura (w-full) e sem p-8 (padding)
+              Se não for: Tem a margem da sidebar (ml-64) e padding (p-8)
+          */}
+          <main className={`flex-1 flex flex-col ${!isLoginPage ? 'ml-64 p-8' : 'w-full'}`}>
+            {children}
+          </main>
+
+        </div>
       </body>
     </html>
   );

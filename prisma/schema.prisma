@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,56 +10,47 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// --- TABELA DE USUÁRIOS ---
 model User {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
-  password  String   // Vamos guardar o hash da senha aqui
-  avatarUrl String?  // Foto de perfil (opcional)
-  role      String   @default("USER") // 'ADMIN' ou 'USER'
-  
+  password  String
+  role      String   @default("USER")
+  avatarUrl String?
+  approved  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relacionamentos: Um usuário tem vários lançamentos e logs
-  lancamentos Lancamento[]
-  logs        LogSistema[]
+  // --- RELACIONAMENTOS (OBRIGATÓRIOS PARA O LOG FUNCIONAR) ---
+  logs      LogSistema[] 
 
   @@map("users")
 }
 
-// --- TABELA DE LANÇAMENTOS ---
 model Lancamento {
   id        String   @id @default(uuid())
   descricao String
-  valor     Decimal  @db.Decimal(10, 2)
+  valor     Float
   tipo      String   // ENTRADA ou SAIDA
-  categoria String   // FIXO ou VARIAVEL
-  status    String   // PENDENTE ou PAGO
-  data      String   // YYYY-MM-DD
-  
+  categoria String
+  status    String   @default("PENDENTE")
+  data      DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // Dono do Lançamento
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
 
   @@map("lancamentos")
 }
 
-// --- TABELA DE AUDITORIA ---
 model LogSistema {
-  id          String   @id @default(uuid())
-  acao        String   // INSERT, UPDATE, DELETE, LOGIN
-  detalhe     String
-  modulo      String
-  dataHora    DateTime @default(now())
+  id        String   @id @default(uuid())
+  acao      String   // Ex: "Aprovou acesso", "Alterou Foto"
+  detalhes  String?
+  
+  // Relacionamento com quem fez a ação
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 
-  // Quem fez a ação?
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 
   @@map("logs_sistema")
 }
