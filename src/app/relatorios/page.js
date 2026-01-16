@@ -1,38 +1,36 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FileSpreadsheet, Download, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { FileSpreadsheet, Download, Loader2, Calendar, Search, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Relatorios() {
   const [transacoes, setTransacoes] = useState([]);
-  const [filtrados, setFiltrados] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
 
   const [filtros, setFiltros] = useState({
-    // Removi a data automática do mês para garantir que você veja os dados que já existem
     dataInicio: '', 
     dataFim: '',
     tipo: 'TODOS',
     status: 'TODOS',
-    categoria: 'TODAS'
+    categoria: 'TODAS',
+    busca: ''
   });
 
   useEffect(() => {
     async function carregarDados() {
       try {
-        // O t=Date.now() impede o navegador de te mostrar dados velhos em cache
+        setIsLoading(true);
         const res = await fetch(`/api/lancamentos?t=${Date.now()}`, { cache: 'no-store' });
         const data = await res.json();
         if (Array.isArray(data)) {
           setTransacoes(data);
-          setFiltrados(data);
           const cats = [...new Set(data.map(item => item.categoria))].sort();
           setCategoriasDisponiveis(cats);
         }
       } catch (error) {
-        console.error("Erro:", error);
+        // Erro silencioso
       } finally {
         setIsLoading(false);
       }
@@ -40,33 +38,33 @@ export default function Relatorios() {
     carregarDados();
   }, []);
 
-  useEffect(() => {
-    let dados = [...transacoes];
+  // --- LÓGICA DE FILTRO REFORÇADA (STRING PURA) ---
+  const filtrados = useMemo(() => {
+    return transacoes.filter(t => {
+      // Extrai apenas a string YYYY-MM-DD (ex: "2026-01-16")
+      const dataItemStr = t.data.split('T')[0];
 
-    // LÓGICA DE FILTRO REFORÇADA: Converte para string YYYY-MM-DD antes de comparar
-    if (filtros.dataInicio) {
-      dados = dados.filter(t => {
-        const dataFormatada = new Date(t.data).toISOString().split('T')[0];
-        return dataFormatada >= filtros.dataInicio;
-      });
-    }
-    if (filtros.dataFim) {
-      dados = dados.filter(t => {
-        const dataFormatada = new Date(t.data).toISOString().split('T')[0];
-        return dataFormatada <= filtros.dataFim;
-      });
-    }
-    
-    if (filtros.tipo !== 'TODOS') dados = dados.filter(t => t.tipo === filtros.tipo);
-    if (filtros.status !== 'TODOS') dados = dados.filter(t => t.status === filtros.status);
-    if (filtros.categoria !== 'TODAS') dados = dados.filter(t => t.categoria === filtros.categoria);
+      const matchesDataInicio = !filtros.dataInicio || dataItemStr >= filtros.dataInicio;
+      const matchesDataFim = !filtros.dataFim || dataItemStr <= filtros.dataFim;
+      const matchesTipo = filtros.tipo === 'TODOS' || t.tipo === filtros.tipo;
+      const matchesStatus = filtros.status === 'TODOS' || t.status === filtros.status;
+      const matchesCategoria = filtros.categoria === 'TODAS' || t.categoria === filtros.categoria;
+      const matchesBusca = !filtros.busca || t.descricao.toLowerCase().includes(filtros.busca.toLowerCase());
 
-    setFiltrados(dados);
-  }, [filtros, transacoes]);
+      return matchesDataInicio && matchesDataFim && matchesTipo && matchesStatus && matchesCategoria && matchesBusca;
+    });
+  }, [transacoes, filtros]);
+
+  // FORMATAÇÃO DE EXIBIÇÃO (DATA REAL DO BANCO SEM FUSO)
+  const formatarDataExibicao = (dataString) => {
+    if (!dataString) return "";
+    const [ano, mes, dia] = dataString.split('T')[0].split('-');
+    return `${dia}/${mes}/${ano}`;
+  };
 
   const gerarExcel = () => {
     const dadosParaExcel = filtrados.map(item => ({
-      Data: new Date(item.data).toLocaleDateString('pt-BR'),
+      Data: formatarDataExibicao(item.data),
       Descrição: item.descricao,
       Categoria: item.categoria,
       Tipo: item.tipo,
@@ -76,8 +74,8 @@ export default function Relatorios() {
 
     const worksheet = XLSX.utils.json_to_sheet(dadosParaExcel);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório Financeiro");
-    XLSX.writeFile(workbook, `Relatorio_Montranel.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Financeiro");
+    XLSX.writeFile(workbook, `Relatorio_Pillar_IT.xlsx`);
   };
 
   const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -86,140 +84,126 @@ export default function Relatorios() {
   const totalSaida = filtrados.filter(t => t.tipo === 'SAIDA').reduce((acc, curr) => acc + Number(curr.valor), 0);
   const saldoPeriodo = totalEntrada - totalSaida;
 
+  if (isLoading) return (
+    <div className="h-full w-full flex flex-col items-center justify-center p-20 text-slate-400 gap-4">
+      <Loader2 className="animate-spin text-emerald-600" size={40} />
+      <p className="font-black uppercase text-[10px] tracking-[0.2em]">Gerando Relatório Analítico...</p>
+    </div>
+  );
+
   return (
-    <div className="space-y-6 fade-in h-full flex flex-col pb-10">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* --- CABEÇALHO PADRONIZADO --- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+          <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-100">
             <FileSpreadsheet size={28} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
-              Relatórios Analíticos
-            </h1>
-            <p className="text-slate-500 text-sm">
-              Filtre dados históricos e exporte para Excel.
-            </p>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">Relatórios Analíticos</h1>
+            <p className="text-slate-500 text-sm font-medium">Auditoria e conferência de dados.</p>
           </div>
         </div>
         
         <button 
           onClick={gerarExcel}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-900/10 transition-all active:scale-95"
+          className="bg-slate-900 hover:bg-emerald-600 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-xl"
         >
-          <Download size={20} /> Baixar Planilha
+          <Download size={16} /> Baixar Planilha
         </button>
       </div>
 
-      {/* --- BARRA DE FILTROS --- */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-          <div className="md:col-span-1">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">De:</label>
-            <input type="date" className="w-full p-2 bg-slate-50 border rounded-lg text-sm" value={filtros.dataInicio} onChange={e => setFiltros({...filtros, dataInicio: e.target.value})} />
+      {/* FILTROS AVANÇADOS */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-4 relative">
+             <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+             <input 
+              type="text" 
+              placeholder="Buscar por descrição..." 
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+              value={filtros.busca}
+              onChange={e => setFiltros({...filtros, busca: e.target.value})}
+             />
           </div>
-          <div className="md:col-span-1">
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Até:</label>
-            <input type="date" className="w-full p-2 bg-slate-50 border rounded-lg text-sm" value={filtros.dataFim} onChange={e => setFiltros({...filtros, dataFim: e.target.value})} />
+          <div className="md:col-span-2">
+            <input type="date" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none" value={filtros.dataInicio} onChange={e => setFiltros({...filtros, dataInicio: e.target.value})} />
           </div>
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Tipo</label>
-            <select className="w-full p-2 bg-slate-50 border rounded-lg text-sm" value={filtros.tipo} onChange={e => setFiltros({...filtros, tipo: e.target.value})}>
-              <option value="TODOS">Todos</option>
-              <option value="ENTRADA">Entradas</option>
-              <option value="SAIDA">Saídas</option>
+          <div className="md:col-span-2">
+            <input type="date" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none" value={filtros.dataFim} onChange={e => setFiltros({...filtros, dataFim: e.target.value})} />
+          </div>
+          <div className="md:col-span-2">
+            <select className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-600 outline-none" value={filtros.tipo} onChange={e => setFiltros({...filtros, tipo: e.target.value})}>
+              <option value="TODOS">TODOS OS FLUXOS</option>
+              <option value="ENTRADA">RECEITAS</option>
+              <option value="SAIDA">DESPESAS</option>
             </select>
           </div>
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Categoria</label>
-            <select className="w-full p-2 bg-slate-50 border rounded-lg text-sm" value={filtros.categoria} onChange={e => setFiltros({...filtros, categoria: e.target.value})}>
-              <option value="TODAS">Todas</option>
-              {categoriasDisponiveis.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-          </div>
-           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Status</label>
-            <select className="w-full p-2 bg-slate-50 border rounded-lg text-sm" value={filtros.status} onChange={e => setFiltros({...filtros, status: e.target.value})}>
-              <option value="TODOS">Todos</option>
-              <option value="PAGO">Pago</option>
-              <option value="PENDENTE">Pendente</option>
+          <div className="md:col-span-2">
+            <select className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-600 outline-none" value={filtros.status} onChange={e => setFiltros({...filtros, status: e.target.value})}>
+              <option value="TODOS">TODOS OS STATUS</option>
+              <option value="PAGO">PAGO</option>
+              <option value="PENDENTE">PENDENTE</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* --- TABELA DE DADOS --- */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col">
-        {isLoading ? (
-          <div className="p-8 text-center text-slate-400 flex flex-col items-center gap-2">
-            <Loader2 className="animate-spin text-blue-600" />
-            <span>Sincronizando com o banco...</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-100 text-slate-600 text-xs uppercase font-bold sticky top-0">
-                <tr>
-                  <th className="p-4 border-b">Data</th>
-                  <th className="p-4 border-b">Descrição</th>
-                  <th className="p-4 border-b">Categoria</th>
-                  <th className="p-4 border-b">Status</th>
-                  <th className="p-4 border-b text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {filtrados.length === 0 ? (
-                  <tr><td colSpan="5" className="p-20 text-center text-slate-400">
-                    Nenhum registro encontrado para os filtros selecionados.
-                  </td></tr>
-                ) : (
-                  filtrados.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="p-3 text-slate-500 font-mono">
-                        {new Date(item.data).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="p-3 font-medium text-slate-800">{item.descricao}</td>
-                      <td className="p-3">
-                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-200">
-                          {item.categoria}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          item.status === 'PAGO' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-orange-100 text-orange-700 border-orange-200'
-                        }`}>
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className={`p-3 text-right font-bold font-mono ${item.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {item.tipo === 'SAIDA' ? '-' : '+'} {formatMoney(Number(item.valor))}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {filtrados.length > 0 && (
-                <tfoot className="bg-slate-50 border-t-2 border-slate-200 font-bold text-slate-700">
-                  <tr>
-                    <td colSpan="4" className="p-4 text-right uppercase text-xs tracking-wider">Total Selecionado:</td>
-                    <td className={`p-4 text-right text-base ${saldoPeriodo >= 0 ? 'text-blue-700' : 'text-rose-700'}`}>
-                      {formatMoney(saldoPeriodo)}
+      {/* TABELA */}
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm flex-1 flex flex-col">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoria</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filtrados.length === 0 ? (
+                <tr><td colSpan="5" className="p-20 text-center text-slate-300 font-bold uppercase text-[10px] tracking-widest">Nenhum registro para os critérios selecionados.</td></tr>
+              ) : (
+                filtrados.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/80 transition-all">
+                    <td className="p-5 text-xs text-slate-500 font-black">
+                      {formatarDataExibicao(item.data)}
+                    </td>
+                    <td className="p-5 font-bold text-slate-800 uppercase tracking-tight text-xs">{item.descricao}</td>
+                    <td className="p-5">
+                      <span className="bg-white border border-slate-200 text-slate-400 px-2 py-1 rounded-lg text-[9px] font-black uppercase">{item.categoria}</span>
+                    </td>
+                    <td className="p-5 text-center">
+                      <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase ${item.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{item.status}</span>
+                    </td>
+                    <td className={`p-5 text-right font-black text-sm ${item.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                      {item.tipo === 'SAIDA' ? '- ' : '+ '}{formatMoney(Number(item.valor))}
                     </td>
                   </tr>
-                </tfoot>
+                ))
               )}
-            </table>
-          </div>
-        )}
+            </tbody>
+          </table>
+        </div>
       </div>
       
-      {/* RESUMO RÁPIDO NO RODAPÉ */}
-      <div className="grid grid-cols-3 gap-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-        <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 text-emerald-700">Entradas: {formatMoney(totalEntrada)}</div>
-        <div className="bg-rose-50 p-3 rounded-lg border border-rose-100 text-rose-700">Saídas: {formatMoney(totalSaida)}</div>
-        <div className="bg-slate-100 p-3 rounded-lg border border-slate-200 text-slate-700">Registros: {filtrados.length}</div>
+      {/* SUMÁRIO */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Receitas</p>
+          <p className="text-2xl font-black text-emerald-600">{formatMoney(totalEntrada)}</p>
+        </div>
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Despesas</p>
+          <p className="text-2xl font-black text-rose-600">{formatMoney(totalSaida)}</p>
+        </div>
+        <div className={`p-6 rounded-3xl shadow-2xl flex flex-col items-center text-white transition-all ${saldoPeriodo >= 0 ? 'bg-slate-900' : 'bg-rose-900'}`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-slate-400">Saldo Líquido</p>
+          <p className="text-3xl font-black">{formatMoney(saldoPeriodo)}</p>
+        </div>
       </div>
     </div>
   );

@@ -12,26 +12,20 @@ import {
 } from 'recharts';
 
 export default function Home() {
-  // Começa como null para forçar o Skeleton e não mostrar "Visitante" errado
   const [user, setUser] = useState(null);
   const [transacoes, setTransacoes] = useState([]);
   const [loadingDados, setLoadingDados] = useState(true);
 
-  // Cores
   const CORES_DESPESA = ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8'];
   const CORES_RECEITA = ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'];
 
-  // 1. CARREGAR USUÁRIO E DADOS
   useEffect(() => {
-    // Carrega User do LocalStorage
     const userSalvo = localStorage.getItem('pillar-user');
     if (userSalvo) {
       setUser(JSON.parse(userSalvo));
     } else {
       setUser({ name: 'Visitante', avatarUrl: null });
     }
-
-    // Carrega Dados do Banco
     carregarDados();
   }, []);
 
@@ -50,12 +44,9 @@ export default function Home() {
     }
   }
 
-  // 2. PROCESSAMENTO OTIMIZADO (USEMEMO)
-  // O React só vai recalcular isso se 'transacoes' mudar. O resto do tempo, ele puxa da memória.
-const estatisticas = useMemo(() => {
+  const estatisticas = useMemo(() => {
     if (!transacoes || transacoes.length === 0) return null;
 
-    // Inicializadores
     let geral = { entrada: 0, saida: 0, saldo: 0 };
     let hoje = { entrada: 0, saida: 0 };
     let semana = { entrada: 0, saida: 0 };
@@ -64,51 +55,52 @@ const estatisticas = useMemo(() => {
     const receitasPorCategoria = {};
     const contasAlertas = [];
 
-    // Referências de Tempo
     const agora = new Date();
-    const hojeStr = agora.toISOString().split('T')[0];
-    const dataLimiteAlerta = new Date();
-    dataLimiteAlerta.setDate(agora.getDate() + 10);
+    // Criamos o hoje sem horas para comparação exata de dias
+    const hojeComparacao = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const hojeStr = hojeComparacao.toISOString().split('T')[0];
+    
+    const dataLimiteAlerta = new Date(hojeComparacao);
+    dataLimiteAlerta.setDate(hojeComparacao.getDate() + 10);
 
     transacoes.forEach(t => {
-      // --- CURA DA DATA ---
-      // Tentamos converter o que vem do banco (string ou objeto) para Date real
-      const dataObjeto = new Date(t.data);
+      // TRATAMENTO DA DATA: Evita o erro de -1 dia convertendo string pura YYYY-MM-DD para objeto local
+      const apenasData = t.data.split('T')[0];
+      const [ano, mes, dia] = apenasData.split('-').map(Number);
+      const dataObjeto = new Date(ano, mes - 1, dia);
       
-      // Se a data for inválida, pulamos esse registro para não travar o sistema
       if (isNaN(dataObjeto.getTime())) return;
 
       const valor = Number(t.valor);
-      const dataItemStr = dataObjeto.toISOString().split('T')[0];
 
-      // KPIs e Gráficos (Apenas PAGO)
       if (t.status === 'PAGO') {
         if (t.tipo === 'ENTRADA') geral.entrada += valor;
         else geral.saida += valor;
 
-        // Comparação de "Hoje"
-        if (dataItemStr === hojeStr) {
+        if (apenasData === hojeStr) {
           if (t.tipo === 'ENTRADA') hoje.entrada += valor;
           else hoje.saida += valor;
         }
 
-        // Agrupamento para Gráfico de Barras
         const mesAno = dataObjeto.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         if (!fluxoPorMes[mesAno]) fluxoPorMes[mesAno] = { name: mesAno, Entradas: 0, Saídas: 0 };
         if (t.tipo === 'ENTRADA') fluxoPorMes[mesAno].Entradas += valor;
         else fluxoPorMes[mesAno].Saídas += valor;
 
-        // Categorias
         if (t.tipo === 'SAIDA') despesasPorCategoria[t.categoria] = (despesasPorCategoria[t.categoria] || 0) + valor;
         if (t.tipo === 'ENTRADA') receitasPorCategoria[t.categoria] = (receitasPorCategoria[t.categoria] || 0) + valor;
       }
 
-      // Alertas (SAIDA + PENDENTE)
       if (t.tipo === 'SAIDA' && t.status === 'PENDENTE') {
-        if (dataObjeto >= new Date().setHours(0,0,0,0) && dataObjeto <= dataLimiteAlerta) {
-          const diff = dataObjeto - new Date().setHours(0,0,0,0);
-          const dias = Math.ceil(diff / (1000 * 60 * 60 * 24));
-          contasAlertas.push({ ...t, diasRestantes: dias });
+        if (dataObjeto <= dataLimiteAlerta) {
+          const diff = dataObjeto.getTime() - hojeComparacao.getTime();
+          const dias = Math.round(diff / (1000 * 60 * 60 * 24));
+          
+          contasAlertas.push({ 
+            ...t, 
+            diasRestantes: dias,
+            dataExibicao: `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`
+          });
         }
       }
     });
@@ -117,24 +109,28 @@ const estatisticas = useMemo(() => {
 
     return {
       kpis: { geral, hoje, semana },
-      alertas: contasAlertas,
+      alertas: contasAlertas.sort((a,b) => a.diasRestantes - b.diasRestantes),
       graficoBarra: Object.values(fluxoPorMes).slice(-6),
       graficoPizzaDespesa: Object.entries(despesasPorCategoria).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0,5),
       graficoPizzaReceita: Object.entries(receitasPorCategoria).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0,5)
     };
   }, [transacoes]);
 
-  // Ação de Pagar
   const handleMarcarComoPago = async (id) => {
     try {
-      await fetch(`/api/lancamentos/${id}`, {
+      const res = await fetch(`/api/lancamentos/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'PAGO' })
       });
-      carregarDados(); // Recarrega para atualizar gráficos
+
+      if (res.ok) {
+        setTransacoes(prev => prev.map(t => 
+          t.id === id ? { ...t, status: 'PAGO' } : t
+        ));
+      }
     } catch (error) {
-      alert("Erro ao atualizar status.");
+      console.error("Erro na requisição:", error);
     }
   };
 
@@ -147,8 +143,6 @@ const estatisticas = useMemo(() => {
 
   const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // 3. ESTADO DE CARREGAMENTO (SKELETON)
-  // Evita o "Flash" de Visitante e layout quebrado
   if (!user || loadingDados) {
     return <DashboardSkeleton />;
   }
@@ -195,15 +189,17 @@ const estatisticas = useMemo(() => {
                   <div>
                     <p className="text-slate-800 font-bold text-sm truncate max-w-[150px]" title={conta.descricao}>{conta.descricao}</p>
                     <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-                      <Clock size={12} /> Vence: {new Date(conta.data).toLocaleDateString('pt-BR').slice(0,5)}
+                      <Clock size={12} /> Vence: {conta.dataExibicao}
                     </p>
                     <p className="text-rose-700 font-black text-lg mt-1">{formatMoney(Number(conta.valor))}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${conta.diasRestantes === 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-orange-200 text-orange-800'}`}>
-                      {conta.diasRestantes === 0 ? 'HOJE' : `${conta.diasRestantes} dias`}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                      conta.diasRestantes <= 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-orange-200 text-orange-800'
+                    }`}>
+                      {conta.diasRestantes < 0 ? `ATRASADO ${Math.abs(conta.diasRestantes)} D` : conta.diasRestantes === 0 ? 'HOJE' : `${conta.diasRestantes} dias`}
                     </span>
-                    <button onClick={() => handleMarcarComoPago(conta.id)} className="flex items-center gap-1 bg-white hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95" title="Marcar como Pago">
+                    <button onClick={() => handleMarcarComoPago(conta.id)} className="flex items-center gap-1 bg-white hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">
                       <CheckCircle size={14} /> Já Paguei
                     </button>
                   </div>
@@ -290,7 +286,6 @@ const estatisticas = useMemo(() => {
   );
 }
 
-// 4. COMPONENTE VISUAL DE CARREGAMENTO (SKELETON)
 function DashboardSkeleton() {
   return (
     <div className="space-y-8 fade-in h-screen pb-10">
