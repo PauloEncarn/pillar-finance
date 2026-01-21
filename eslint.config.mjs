@@ -1,19 +1,14 @@
-import { FlatCompat } from "@eslint/eslintrc";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
 
-const compat = new FlatCompat({
-  // Isso emula o comportamento da versão anterior para evitar erros de serialização
-  baseDirectory: process.cwd(),
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals"),
-  {
-    rules: {
-      // Desativa regras que costumam dar falso-positivo no build da Vercel
-      "@next/next/no-html-link-for-pages": "off",
-      "react/no-unescaped-entities": "off"
-    }
-  }
-];
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
 
 export default eslintConfig;
