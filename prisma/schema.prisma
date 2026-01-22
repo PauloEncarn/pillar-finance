@@ -35,6 +35,12 @@ model Lancamento {
   categoria String
   status    String   @default("PENDENTE")
   data      DateTime
+banco          String?  // CAIXA, ITAU, BRADESCO, SANTANDER
+  tipoConta      String?  // PJ ou PF
+  formaPagamento String?  // CARTAO, PIX, BOLETO, TED, CREDITO
+  parcelaAtual   Int?     @default(1)
+  totalParcelas  Int?     @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

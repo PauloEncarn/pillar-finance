@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, Tag, 
-  Wallet, AlertCircle, CheckCircle2, X, Search, ChevronLeft, ChevronRight 
+  Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, 
+  Wallet, AlertCircle, CheckCircle2, X, Search, ChevronLeft, ChevronRight, 
+  Landmark, ChevronDown, ChevronUp, Layers, Calendar
 } from 'lucide-react';
 
 export default function Lancamentos() {
@@ -16,26 +17,12 @@ export default function Lancamentos() {
   const [paginaAtual, setPaginaAtual] = useState(1);
   const itensPorPagina = 10;
 
+  const [gruposAbertos, setGruposAbertos] = useState({});
   const [modalAberto, setModalAberto] = useState(false);
   const [modalConfirmacao, setModalConfirmacao] = useState({ aberto: false, id: null });
   const [notificacao, setNotificacao] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
-  const categoriasReceita = ["SERVICOS", "LOCACAO", "VENDAS", "OUTRAS RECEITAS"];
-  const categoriasDespesa = ["COMBUSTIVEL", "MANUTENCAO", "PECAS", "SALARIOS", "ALIMENTACAO", "ALUGUEL", "IMPOSTOS", "ADMINISTRATIVO", "OUTRAS DESPESAS"];
-
-  const [novoItem, setNovoItem] = useState({
-    descricao: '', valor: '', tipo: 'SAIDA', categoria: 'COMBUSTIVEL', status: 'PENDENTE', data: ''
-  });
-
-  // --- FUNÇÃO PARA EXIBIR DATA SEM ERRO DE FUSO ---
-  const formatarDataExibicao = (dataString) => {
-    if (!dataString) return "";
-    // Pegamos apenas a parte YYYY-MM-DD ignorando qualquer informação de hora/fuso
-    const apenasData = dataString.split('T')[0];
-    const [ano, mes, dia] = apenasData.split('-');
-    // Retornamos o texto puro montado manualmente
-    return `${dia}/${mes}/${ano}`;
-  };
+  const bancos = ["CAIXA", "ITAU", "BRADESCO", "SANTANDER"];
 
   const carregarDados = async () => {
     try {
@@ -43,47 +30,51 @@ export default function Lancamentos() {
       const res = await fetch(`/api/lancamentos?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data)) setTransacoes(data);
-    } catch (error) {
-      exibirNotificacao("Erro de conexão", "erro");
-    } finally {
-      setIsLoading(false);
+    } catch (error) { 
+      exibirNotificacao("Erro de conexão", "erro"); 
+    } finally { 
+      setIsLoading(false); 
     }
   };
 
+  const [novoItem, setNovoItem] = useState({
+    descricao: '', valor: '', tipo: 'SAIDA', categoria: 'COMBUSTIVEL', status: 'PENDENTE', data: '',
+    banco: 'ITAU', tipoConta: 'PJ', formaPagamento: 'PIX', parcelas: '1'
+  });
+
   useEffect(() => {
-    const hoje = new Date();
-    // Garante que o input comece com a data local correta
-    const hojeLocal = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
-    setNovoItem(prev => ({ ...prev, data: hojeLocal }));
+    const hoje = new Date().toISOString().split('T')[0];
+    setNovoItem(prev => ({ ...prev, data: hoje }));
     carregarDados();
   }, []);
 
-  const dadosFiltrados = useMemo(() => {
-    return transacoes.filter(t => 
-      t.descricao.toLowerCase().includes(busca.toLowerCase())
-    );
-  }, [transacoes, busca]);
-
-  const totalPaginas = Math.ceil(dadosFiltrados.length / itensPorPagina);
-  
-  const transacoesPaginadas = useMemo(() => {
-    const inicio = (paginaAtual - 1) * itensPorPagina;
-    const fim = inicio + itensPorPagina;
-    return dadosFiltrados.slice(inicio, fim);
-  }, [dadosFiltrados, paginaAtual]);
-
-  useEffect(() => {
-    setPaginaAtual(1);
-  }, [busca]);
+  const formatarDataExibicao = (dataString) => {
+    if (!dataString) return "";
+    const [ano, mes, dia] = dataString.split('T')[0].split('-');
+    return `${dia}/${mes}/${ano}`;
+  };
 
   const exibirNotificacao = (msg, tipo = 'sucesso') => {
     setNotificacao({ visivel: true, mensagem: msg, tipo });
     setTimeout(() => setNotificacao({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3000);
   };
 
+  const transacoesFiltradas = useMemo(() => {
+    return transacoes.filter(t => t.descricao?.toLowerCase().includes(busca.toLowerCase()));
+  }, [transacoes, busca]);
+
+  const itensPrincipais = useMemo(() => {
+    return transacoesFiltradas.filter(t => t.parcelaAtual === 1 || t.totalParcelas <= 1);
+  }, [transacoesFiltradas]);
+
+  const totalPaginas = Math.ceil(itensPrincipais.length / itensPorPagina);
+  const itensDaPagina = useMemo(() => {
+    const inicio = (paginaAtual - 1) * itensPorPagina;
+    return itensPrincipais.slice(inicio, inicio + itensPorPagina);
+  }, [itensPrincipais, paginaAtual]);
+
   const handleSalvar = async (e) => {
     e.preventDefault();
-    if (!novoItem.descricao || !novoItem.valor) return;
     setIsSalvando(true);
     try {
       const res = await fetch('/api/lancamentos', {
@@ -93,15 +84,27 @@ export default function Lancamentos() {
       });
       if (res.ok) {
         await carregarDados();
-        setNovoItem(prev => ({ ...prev, descricao: '', valor: '', status: 'PENDENTE' }));
         setModalAberto(false);
-        exibirNotificacao("Lançamento salvo com sucesso!");
+        setNovoItem(prev => ({ ...prev, descricao: '', valor: '', parcelas: '1' }));
+        exibirNotificacao("Lançamento criado!");
       }
-    } catch (error) {
-      exibirNotificacao("Erro ao salvar", "erro");
-    } finally {
-      setIsSalvando(false);
-    }
+    } catch (error) { exibirNotificacao("Erro ao salvar", "erro"); }
+    finally { setIsSalvando(false); }
+  };
+
+  const handleAlternarStatus = async (item) => {
+    const statusCycle = { 'PENDENTE': 'PAGO', 'PAGO': 'EM ABERTO', 'EM ABERTO': 'PENDENTE' };
+    const novoStatus = statusCycle[item.status] || 'PENDENTE';
+    setProcessandoId(item.id);
+    try {
+      await fetch(`/api/lancamentos/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: novoStatus })
+      });
+      setTransacoes(prev => prev.map(t => t.id === item.id ? { ...t, status: novoStatus } : t));
+    } catch (error) { exibirNotificacao("Erro ao atualizar", "erro"); }
+    finally { setProcessandoId(null); }
   };
 
   const confirmarExclusao = async () => {
@@ -112,212 +115,235 @@ export default function Lancamentos() {
       const res = await fetch(`/api/lancamentos/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setTransacoes(prev => prev.filter(item => item.id !== id));
-        exibirNotificacao("Removido com sucesso");
+        exibirNotificacao("Removido!");
       }
-    } catch (error) {
-      exibirNotificacao("Erro ao excluir", "erro");
-    } finally {
-      setProcessandoId(null);
-    }
-  };
-
-  const handleAlternarStatus = async (item) => {
-    const novoStatus = item.status === 'PENDENTE' ? 'PAGO' : 'PENDENTE';
-    setProcessandoId(item.id);
-    try {
-      const res = await fetch(`/api/lancamentos/${item.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: novoStatus })
-      });
-      if (res.ok) {
-        setTransacoes(prev => prev.map(t => t.id === item.id ? { ...t, status: novoStatus } : t));
-      }
-    } catch (error) {
-      exibirNotificacao("Erro de atualização", "erro");
-    } finally {
-      setProcessandoId(null);
-    }
+    } catch (error) { exibirNotificacao("Erro ao excluir", "erro"); }
+    finally { setProcessandoId(null); }
   };
 
   return (
-    <div className="relative space-y-8 animate-in fade-in duration-500 pb-10">
+    <div className="relative space-y-6 animate-in fade-in pb-10">
       
       {notificacao.visivel && (
-        <div className={`fixed top-5 right-5 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border animate-in slide-in-from-right-full ${
-          notificacao.tipo === 'sucesso' ? 'bg-slate-900 border-emerald-500/50 text-white' : 'bg-rose-900 border-rose-500 text-white'
-        }`}>
-          {notificacao.tipo === 'sucesso' ? <CheckCircle2 className="text-emerald-400" size={20} /> : <AlertCircle size={20} />}
+        <div className={`fixed top-5 right-5 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${notificacao.tipo === 'sucesso' ? 'bg-slate-900 border-emerald-500/50 text-white' : 'bg-rose-900 border-rose-50 text-white font-bold'}`}>
           <span className="font-bold text-sm">{notificacao.mensagem}</span>
         </div>
       )}
 
+      {/* MODAL CONFIRMAÇÃO */}
       {modalConfirmacao.aberto && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center border border-slate-100">
-            <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle size={32} /></div>
-            <h3 className="text-xl font-black text-slate-800 mb-2 tracking-tighter">Excluir Registro?</h3>
-            <p className="text-slate-500 text-sm mb-6 font-medium">Esta operação não pode ser revertida.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setModalConfirmacao({ aberto: false, id: null })} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs hover:bg-slate-200 transition-all">CANCELAR</button>
-              <button onClick={confirmarExclusao} className="flex-1 px-4 py-3 bg-rose-600 text-white rounded-xl font-black text-xs hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all">EXCLUIR</button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
+            <Trash2 size={32} className="mx-auto text-rose-500 mb-4" />
+            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase">Excluir?</h3>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setModalConfirmacao({ aberto: false, id: null })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs">VOLTAR</button>
+              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg">EXCLUIR</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* HEADER */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-white border border-slate-100 shadow-sm rounded-2xl text-blue-600"><Wallet size={28} /></div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">Lançamentos</h1>
+            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Gestão Pillar Finance</p>
+          </div>
+        </div>
+        <div className="flex gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-64">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm" />
+          </div>
+          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-lg shadow-blue-100"><Plus size={16} /> Novo Registro</button>
+        </div>
+      </div>
+
+      {/* TABELA COM SOMBREAMENTO INTENSO */}
+      <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                <th className="p-6 text-center">Data</th>
+                <th className="p-6">Descrição / Banco</th>
+                <th className="p-6 text-center">Status / Progresso</th>
+                <th className="p-6 text-right">Valor Parcela</th>
+                <th className="p-6 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {itensDaPagina.map((item) => {
+                const baseName = item.descricao.split(' (')[0];
+                const grupoKey = `${baseName}-${item.valor}-${item.banco}`;
+                const estaAberto = gruposAbertos[grupoKey];
+                
+                const parcelasDoGrupo = transacoesFiltradas.filter(t => 
+                  t.descricao.startsWith(baseName) && 
+                  t.valor === item.valor && 
+                  t.banco === item.banco &&
+                  t.totalParcelas > 1
+                ).sort((a,b) => a.parcelaAtual - b.parcelaAtual);
+
+                const pagas = parcelasDoGrupo.filter(t => t.status === 'PAGO').length;
+                const isEntrada = item.tipo === 'ENTRADA';
+                
+                // Estilo do sombreamento
+                const corFundo = isEntrada 
+                  ? 'bg-emerald-100/50 hover:bg-emerald-100/80' 
+                  : 'bg-rose-100/50 hover:bg-rose-100/80';
+
+                return (
+                  <React.Fragment key={item.id}>
+                    {/* LINHA PAI */}
+                    <tr className={`transition-all ${corFundo}`}>
+                      <td className="p-6 text-center">
+                        <span className="text-xs text-slate-600 font-black">{formatarDataExibicao(item.data)}</span>
+                      </td>
+                      <td className="p-6">
+                        <div className="flex items-center gap-3">
+                          {item.totalParcelas > 1 && (
+                            <button onClick={() => setGruposAbertos(p => ({...p, [grupoKey]: !estaAberto}))} className={`p-1.5 rounded-lg transition-all ${estaAberto ? 'bg-blue-600 text-white rotate-180 shadow-md' : 'bg-white/70 text-slate-400'}`}>
+                              <ChevronDown size={14} />
+                            </button>
+                          )}
+                          <div className="flex flex-col">
+                            <span className="font-black text-slate-800 text-sm uppercase tracking-tight">
+                              {baseName}
+                              {item.totalParcelas > 1 && <span className="ml-2 text-[9px] bg-white/60 px-2 py-0.5 rounded text-slate-600 font-black border border-slate-200">{item.totalParcelas}X</span>}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">{item.banco} | {item.tipoConta}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-6 text-center">
+                        {item.totalParcelas > 1 ? (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border ${pagas === item.totalParcelas ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'}`}>
+                            <Layers size={10} /> {pagas}/{item.totalParcelas} PAGAS
+                          </div>
+                        ) : (
+                          <button disabled={processandoId === item.id} onClick={() => handleAlternarStatus(item)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase shadow-sm transition-all ${
+                            item.status === 'PAGO' ? 'bg-emerald-600 text-white' : 
+                            item.status === 'EM ABERTO' ? 'bg-blue-600 text-white' : 'bg-orange-500 text-white'
+                          }`}>
+                            {item.status}
+                          </button>
+                        )}
+                      </td>
+                      <td className={`p-6 text-right font-black text-sm ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {isEntrada ? '+ ' : '- '}{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td className="p-6 text-center">
+                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id })} className="p-2 text-slate-500 hover:text-rose-600 transition-all"><Trash2 size={18} /></button>
+                      </td>
+                    </tr>
+
+                    {/* FILHOS EXPANDIDOS */}
+                    {estaAberto && parcelasDoGrupo.map((parc) => (
+                      <tr key={parc.id} className={`animate-in slide-in-from-top-1 duration-200 ${isEntrada ? 'bg-emerald-50/60' : 'bg-rose-50/60'}`}>
+                        <td className="p-4 text-center text-[10px] text-slate-600 font-black">{formatarDataExibicao(parc.data)}</td>
+                        <td className="p-4 pl-16 font-bold text-slate-600 text-[11px] uppercase">
+                          {parc.descricao} 
+                        </td>
+                        <td className="p-4 text-center">
+                           <button disabled={processandoId === parc.id} onClick={() => handleAlternarStatus(parc)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase ${
+                              parc.status === 'PAGO' ? 'bg-emerald-600 text-white' : 
+                              parc.status === 'EM ABERTO' ? 'bg-blue-500 text-white' : 'bg-orange-500 text-white'
+                            }`}>{processandoId === parc.id ? <Loader2 className="animate-spin" size={10} /> : parc.status}</button>
+                        </td>
+                        <td className={`p-4 text-right font-bold text-xs ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="p-4 text-center">
+                          <button onClick={() => setModalConfirmacao({ aberto: true, id: parc.id })} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* PAGINAÇÃO */}
+      <div className="p-6 bg-white border border-slate-100 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Página {paginaAtual} de {totalPaginas || 1}</span>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm"><ChevronLeft size={18} /></button>
+          <button disabled={paginaAtual === totalPaginas || totalPaginas === 0} onClick={() => setPaginaAtual(p => p + 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm"><ChevronRight size={18} /></button>
+        </div>
+      </div>
+
+      {/* MODAL NOVO REGISTRO */}
       {modalAberto && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in zoom-in-95 duration-200">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden">
-            <div className="flex justify-between items-center p-8 bg-slate-50 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-600 text-white rounded-lg"><Plus size={20} /></div>
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Novo Registro</h3>
-              </div>
-              <button onClick={() => setModalAberto(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-all"><X size={24} /></button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 md:p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-3xl rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden max-h-[95vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 bg-slate-50 border-b border-slate-100">
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Novo Registro</h3>
+              <button onClick={() => setModalAberto(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSalvar} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleSalvar} className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 overflow-y-auto">
               <div className="md:col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Descrição</label>
-                <input type="text" required value={novoItem.descricao} onChange={e => setNovoItem({...novoItem, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ex: Manutenção Mensal" />
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Descrição</label>
+                <input type="text" required value={novoItem.descricao} onChange={e => setNovoItem({...novoItem, descricao: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Tipo</label>
-                <select value={novoItem.tipo} onChange={e => setNovoItem({...novoItem, tipo: e.target.value})} className={`w-full p-4 border rounded-2xl font-black outline-none appearance-none cursor-pointer ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Data Vencimento</label>
+                <input type="date" required value={novoItem.data} onChange={e => setNovoItem({...novoItem, data: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Valor Total (R$)</label>
+                <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" placeholder="0.00" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Banco</label>
+                <select value={novoItem.banco} onChange={e => setNovoItem({...novoItem, banco: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                  {bancos.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Tipo Conta</label>
+                <select value={novoItem.tipoConta} onChange={e => setNovoItem({...novoItem, tipoConta: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                  <option value="PJ">PJ</option>
+                  <option value="PF">PF</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Movimento</label>
+                <select value={novoItem.tipo} onChange={e => setNovoItem({...novoItem, tipo: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
                   <option value="ENTRADA">RECEITA (+)</option>
                   <option value="SAIDA">DESPESA (-)</option>
                 </select>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Categoria</label>
-                <select value={novoItem.categoria} onChange={e => setNovoItem({...novoItem, categoria: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 font-bold outline-none cursor-pointer">
-                  {(novoItem.tipo === 'ENTRADA' ? categoriasReceita : categoriasDespesa).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Pagamento / Parcelas</label>
+                <div className="flex gap-2">
+                   <select value={novoItem.formaPagamento} onChange={e => setNovoItem({...novoItem, formaPagamento: e.target.value})} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm">
+                      <option value="PIX">PIX</option>
+                      <option value="BOLETO">BOLETO</option>
+                      <option value="TED">TED</option>
+                      <option value="CARTAO">DÉBITO</option>
+                      <option value="CREDITO">CRÉDITO</option>
+                   </select>
+                   <select value={novoItem.parcelas} onChange={e => setNovoItem({...novoItem, parcelas: e.target.value})} className="w-20 p-3 bg-blue-50 border border-blue-200 rounded-xl font-black text-blue-700 text-sm">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
+                   </select>
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Valor (R$)</label>
-                <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-black focus:ring-2 focus:ring-blue-600 outline-none" placeholder="0.00" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Data</label>
-                <input type="date" required value={novoItem.data} onChange={e => setNovoItem({...novoItem, data: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-600 font-bold outline-none" />
-              </div>
-              <div className="md:col-span-2 pt-4">
-                <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex justify-center items-center shadow-xl disabled:opacity-50">
-                  {isSalvando ? <Loader2 className="animate-spin" size={24} /> : "Finalizar Lançamento"}
+              <div className="md:col-span-3 pt-4">
+                <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all flex justify-center items-center shadow-xl disabled:opacity-50">
+                  {isSalvando ? <Loader2 className="animate-spin" size={20} /> : `Processar Lançamento`}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-white border border-slate-100 shadow-sm rounded-2xl text-blue-600"><Wallet size={32} /></div>
-          <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Gestão Financeira</h1>
-            <p className="text-slate-500 text-sm font-medium">Visualizando {dadosFiltrados.length} registros no total.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={18} />
-            <input 
-              type="text" 
-              placeholder="Buscar lançamento..." 
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              className="pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-600 w-64 transition-all shadow-sm"
-            />
-          </div>
-          <button onClick={() => setModalAberto(true)} className="flex items-center gap-3 bg-blue-600 hover:bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-xl shadow-blue-200 active:scale-95">
-            <Plus size={20} /> Novo
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
-        {isLoading ? (
-          <div className="p-20 flex flex-col items-center justify-center text-slate-400 gap-4">
-            <Loader2 className="animate-spin text-blue-600" size={40} /> 
-            <p className="font-black uppercase text-xs tracking-widest">Sincronizando Banco de Dados...</p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamento</th>
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoria</th>
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {transacoesPaginadas.length === 0 ? (
-                    <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-bold uppercase text-xs tracking-widest">Nenhum registro encontrado.</td></tr>
-                  ) : (
-                    transacoesPaginadas.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/80 transition-all group">
-                        <td className="p-6">
-                          <div className="flex items-center gap-4">
-                            <div className={`p-2 rounded-xl ${item.tipo === 'ENTRADA' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                              {item.tipo === 'ENTRADA' ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
-                            </div>
-                            <span className="font-black text-slate-700 text-sm uppercase tracking-tight">{item.descricao}</span>
-                          </div>
-                        </td>
-                        <td className="p-6"><span className="text-[10px] font-black text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl uppercase">{item.categoria}</span></td>
-                        {/* AQUI ESTÁ A MUDANÇA: USANDO A NOVA FUNÇÃO DE FORMATAÇÃO */}
-                        <td className="p-6 text-sm text-slate-400 font-bold">{formatarDataExibicao(item.data)}</td>
-                        <td className="p-6">
-                          <button disabled={processandoId === item.id} onClick={() => handleAlternarStatus(item)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${item.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'} disabled:opacity-30`}>
-                            {processandoId === item.id ? <Loader2 className="animate-spin" size={12} /> : item.status}
-                          </button>
-                        </td>
-                        <td className={`p-6 text-right font-black text-base ${item.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                          {item.tipo === 'SAIDA' ? '- ' : '+ '}{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="p-6 text-center">
-                          <button disabled={processandoId === item.id} onClick={() => setModalConfirmacao({ aberto: true, id: item.id })} className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={20} /></button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Página {paginaAtual} de {totalPaginas || 1}
-              </span>
-              <div className="flex gap-2">
-                <button 
-                  disabled={paginaAtual === 1}
-                  onClick={() => setPaginaAtual(p => p - 1)}
-                  className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <button 
-                  disabled={paginaAtual === totalPaginas || totalPaginas === 0}
-                  onClick={() => setPaginaAtual(p => p + 1)}
-                  className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
-                >
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }

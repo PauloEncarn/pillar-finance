@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import { 
   ArrowUpCircle, ArrowDownCircle, Wallet, Calendar, 
-  TrendingUp, Activity, AlertTriangle, Clock, BellRing, User, CheckCircle 
+  TrendingUp, AlertTriangle, Clock, BellRing, User, CheckCircle, 
+  Landmark, UserCheck, BarChart3
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -16,8 +17,8 @@ export default function Home() {
   const [transacoes, setTransacoes] = useState([]);
   const [loadingDados, setLoadingDados] = useState(true);
 
-  const CORES_DESPESA = ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8'];
-  const CORES_RECEITA = ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'];
+  const CORES_DIVERSAS = ['#0f172a', '#0284c7', '#059669', '#d97706', '#7c3aed'];
+  const CORES_TIPO = ['#6366f1', '#ec4899']; // Indigo para PJ, Rosa para PF
 
   useEffect(() => {
     const userSalvo = localStorage.getItem('pillar-user');
@@ -34,9 +35,7 @@ export default function Home() {
       setLoadingDados(true);
       const res = await fetch(`/api/lancamentos?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setTransacoes(data);
-      }
+      if (Array.isArray(data)) setTransacoes(data);
     } catch (error) {
       console.error("Erro dashboard:", error);
     } finally {
@@ -48,54 +47,55 @@ export default function Home() {
     if (!transacoes || transacoes.length === 0) return null;
 
     let geral = { entrada: 0, saida: 0, saldo: 0 };
-    let hoje = { entrada: 0, saida: 0 };
-    let semana = { entrada: 0, saida: 0 };
+    let previsao = { entrada: 0, saida: 0 };
+    const saldosPorBanco = { CAIXA: 0, ITAU: 0, BRADESCO: 0, SANTANDER: 0 };
+    const volumePorTipo = { PJ: 0, PF: 0 };
     const fluxoPorMes = {};
     const despesasPorCategoria = {};
-    const receitasPorCategoria = {};
     const contasAlertas = [];
 
     const agora = new Date();
-    // Criamos o hoje sem horas para comparação exata de dias
     const hojeComparacao = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-    const hojeStr = hojeComparacao.toISOString().split('T')[0];
-    
     const dataLimiteAlerta = new Date(hojeComparacao);
-    dataLimiteAlerta.setDate(hojeComparacao.getDate() + 10);
+    dataLimiteAlerta.setDate(hojeComparacao.getDate() + 15);
 
     transacoes.forEach(t => {
-      // TRATAMENTO DA DATA: Evita o erro de -1 dia convertendo string pura YYYY-MM-DD para objeto local
+      const valor = Number(t.valor);
+      
+      // TRATAMENTO DE DATA SEGURO (YYYY-MM-DD) para evitar erro de fuso horário
       const apenasData = t.data.split('T')[0];
       const [ano, mes, dia] = apenasData.split('-').map(Number);
       const dataObjeto = new Date(ano, mes - 1, dia);
-      
+
       if (isNaN(dataObjeto.getTime())) return;
 
-      const valor = Number(t.valor);
-
       if (t.status === 'PAGO') {
-        if (t.tipo === 'ENTRADA') geral.entrada += valor;
-        else geral.saida += valor;
-
-        if (apenasData === hojeStr) {
-          if (t.tipo === 'ENTRADA') hoje.entrada += valor;
-          else hoje.saida += valor;
+        if (t.tipo === 'ENTRADA') {
+          geral.entrada += valor;
+          if (t.banco) saldosPorBanco[t.banco] = (saldosPorBanco[t.banco] || 0) + valor;
+        } else {
+          geral.saida += valor;
+          if (t.banco) saldosPorBanco[t.banco] = (saldosPorBanco[t.banco] || 0) - valor;
         }
+
+        if (t.tipoConta) volumePorTipo[t.tipoConta] += valor;
 
         const mesAno = dataObjeto.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         if (!fluxoPorMes[mesAno]) fluxoPorMes[mesAno] = { name: mesAno, Entradas: 0, Saídas: 0 };
         if (t.tipo === 'ENTRADA') fluxoPorMes[mesAno].Entradas += valor;
-        else fluxoPorMes[mesAno].Saídas += valor;
+        else {
+          fluxoPorMes[mesAno].Saídas += valor;
+          despesasPorCategoria[t.categoria] = (despesasPorCategoria[t.categoria] || 0) + valor;
+        }
+      } else {
+        // PREVISÕES (PENDENTE OU EM ABERTO)
+        if (t.tipo === 'ENTRADA') previsao.entrada += valor;
+        else previsao.saida += valor;
 
-        if (t.tipo === 'SAIDA') despesasPorCategoria[t.categoria] = (despesasPorCategoria[t.categoria] || 0) + valor;
-        if (t.tipo === 'ENTRADA') receitasPorCategoria[t.categoria] = (receitasPorCategoria[t.categoria] || 0) + valor;
-      }
-
-      if (t.tipo === 'SAIDA' && t.status === 'PENDENTE') {
+        // ALERTAS (Tudo que não está pago e vence em breve)
         if (dataObjeto <= dataLimiteAlerta) {
           const diff = dataObjeto.getTime() - hojeComparacao.getTime();
           const dias = Math.round(diff / (1000 * 60 * 60 * 24));
-          
           contasAlertas.push({ 
             ...t, 
             diasRestantes: dias,
@@ -108,11 +108,11 @@ export default function Home() {
     geral.saldo = geral.entrada - geral.saida;
 
     return {
-      kpis: { geral, hoje, semana },
+      geral, previsao, saldosPorBanco,
+      graficoTipo: Object.entries(volumePorTipo).map(([name, value]) => ({ name, value })),
       alertas: contasAlertas.sort((a,b) => a.diasRestantes - b.diasRestantes),
       graficoBarra: Object.values(fluxoPorMes).slice(-6),
-      graficoPizzaDespesa: Object.entries(despesasPorCategoria).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0,5),
-      graficoPizzaReceita: Object.entries(receitasPorCategoria).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0,5)
+      graficoPizzaDespesa: Object.entries(despesasPorCategoria).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0,5)
     };
   }, [transacoes]);
 
@@ -123,29 +123,13 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'PAGO' })
       });
-
-      if (res.ok) {
-        setTransacoes(prev => prev.map(t => 
-          t.id === id ? { ...t, status: 'PAGO' } : t
-        ));
-      }
-    } catch (error) {
-      console.error("Erro na requisição:", error);
-    }
+      if (res.ok) carregarDados();
+    } catch (error) { console.error(error); }
   };
 
-  const getSaudacao = () => {
-    const hora = new Date().getHours();
-    if (hora < 12) return 'Bom dia';
-    if (hora < 18) return 'Boa tarde';
-    return 'Boa noite';
-  };
+  const formatMoney = (val) => val?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
-  const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  if (!user || loadingDados) {
-    return <DashboardSkeleton />;
-  }
+  if (!user || loadingDados) return <DashboardSkeleton />;
 
   return (
     <div className="space-y-8 fade-in pb-10">
@@ -157,128 +141,113 @@ export default function Home() {
             {user.avatarUrl ? (
               <Image src={user.avatarUrl} alt="Perfil" fill className="rounded-full object-cover" unoptimized />
             ) : (
-              <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
-                <User size={32} />
-              </div>
+              <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400"><User size={32} /></div>
             )}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-              {getSaudacao()}, {user.name.split(' ')[0]}! 
-            </h1>
-            <p className="text-slate-500 text-sm">Resumo financeiro atualizado.</p>
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Olá, {user.name.split(' ')[0]}!</h1>
+            <p className="text-slate-500 text-sm font-medium uppercase tracking-widest text-[10px]">Gestão Pillar Finance Ativa</p>
           </div>
         </div>
-        <div className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-3 shadow-lg">
+        <div className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-3 shadow-lg">
           <Calendar size={18} className="text-blue-400" /> 
           <span className="capitalize">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
         </div>
       </div>
 
-      {/* ALERTAS */}
-      {estatisticas.alertas.length > 0 && (
-        <div className="relative overflow-hidden rounded-2xl shadow-lg border-l-8 border-rose-500 bg-white p-6 animate-in slide-in-from-top-4 duration-500">
-          <div className="absolute top-0 right-0 p-4 opacity-5"><AlertTriangle size={120} className="text-rose-600" /></div>
-          <div className="relative z-10">
-            <h3 className="text-rose-600 font-black text-lg uppercase tracking-wider flex items-center gap-2 mb-4">
-              <BellRing className="animate-pulse" size={24} /> Atenção: {estatisticas.alertas.length} Contas Vencendo
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {estatisticas.alertas.map((conta) => (
-                <div key={conta.id} className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex justify-between items-center group hover:bg-rose-100 transition-colors shadow-sm">
-                  <div>
-                    <p className="text-slate-800 font-bold text-sm truncate max-w-[150px]" title={conta.descricao}>{conta.descricao}</p>
-                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-                      <Clock size={12} /> Vence: {conta.dataExibicao}
-                    </p>
-                    <p className="text-rose-700 font-black text-lg mt-1">{formatMoney(Number(conta.valor))}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
-                      conta.diasRestantes <= 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-orange-200 text-orange-800'
-                    }`}>
-                      {conta.diasRestantes < 0 ? `ATRASADO ${Math.abs(conta.diasRestantes)} D` : conta.diasRestantes === 0 ? 'HOJE' : `${conta.diasRestantes} dias`}
-                    </span>
-                    <button onClick={() => handleMarcarComoPago(conta.id)} className="flex items-center gap-1 bg-white hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">
-                      <CheckCircle size={14} /> Já Paguei
-                    </button>
+      {/* 1. ALERTAS (PRIORIDADE MÁXIMA) */}
+      {estatisticas?.alertas.length > 0 && (
+        <div className="relative overflow-hidden rounded-2xl shadow-lg border-l-8 border-rose-500 bg-white p-6">
+          <h3 className="text-rose-600 font-black text-lg uppercase tracking-wider flex items-center gap-2 mb-4">
+            <BellRing size={24} className="animate-pulse" /> Atenção: {estatisticas.alertas.length} Contas Pendentes
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {estatisticas.alertas.map((conta) => (
+              <div key={conta.id} className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex justify-between items-center transition-all hover:bg-rose-100">
+                <div className="min-w-0 flex-1">
+                  <p className="text-slate-800 font-bold text-sm truncate uppercase">{conta.descricao}</p>
+                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">{conta.dataExibicao} • {formatMoney(Number(conta.valor))}</p>
+                  <div className={`mt-1 inline-block text-[8px] font-black px-1.5 py-0.5 rounded ${conta.diasRestantes <= 0 ? 'bg-rose-600 text-white' : 'bg-orange-200 text-orange-800'}`}>
+                    {conta.diasRestantes < 0 ? `ATRASADO ${Math.abs(conta.diasRestantes)}D` : conta.diasRestantes === 0 ? 'VENCE HOJE' : `FALTAM ${conta.diasRestantes} DIAS`}
                   </div>
                 </div>
-              ))}
-            </div>
+                <button onClick={() => handleMarcarComoPago(conta.id)} className="ml-3 bg-white hover:bg-emerald-50 text-emerald-600 border border-slate-200 p-2 rounded-lg transition-all shadow-sm active:scale-95">
+                  <CheckCircle size={20} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* KPI CARDS */}
+      {/* 2. KPI CARDS PRINCIPAIS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group">
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Receita Acumulada</p>
-          <h3 className="text-3xl font-bold text-slate-800">{formatMoney(estatisticas.kpis.geral.entrada)}</h3>
-          <div className="absolute right-4 top-4 p-3 bg-emerald-50 text-emerald-600 rounded-full"><ArrowUpCircle size={24} /></div>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Saldo em Caixa (Real)</p>
+          <h3 className={`text-3xl font-black ${estatisticas?.geral.saldo >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>{formatMoney(estatisticas?.geral.saldo || 0)}</h3>
+          <div className="absolute right-4 top-4 p-3 bg-slate-50 text-slate-400 rounded-full"><Wallet size={24} /></div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group">
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Despesa Acumulada</p>
-          <h3 className="text-3xl font-bold text-slate-800">{formatMoney(estatisticas.kpis.geral.saida)}</h3>
-          <div className="absolute right-4 top-4 p-3 bg-rose-50 text-rose-600 rounded-full"><ArrowDownCircle size={24} /></div>
+          <p className="text-emerald-500/60 text-[10px] font-black uppercase tracking-widest mb-1">Receitas Confirmadas</p>
+          <h3 className="text-3xl font-black text-emerald-600">{formatMoney(estatisticas?.geral.entrada || 0)}</h3>
+          <div className="mt-2 text-[10px] text-emerald-600/70 font-bold">+ {formatMoney(estatisticas?.previsao.entrada)} previstos</div>
         </div>
-        <div className={`p-6 rounded-2xl border shadow-md relative overflow-hidden text-white ${estatisticas.kpis.geral.saldo >= 0 ? 'bg-slate-900 border-slate-800' : 'bg-rose-900 border-rose-800'}`}>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Saldo em Caixa</p>
-          <h3 className="text-4xl font-bold mt-1">{formatMoney(estatisticas.kpis.geral.saldo)}</h3>
-          <div className="absolute right-4 top-4 p-3 bg-white/10 rounded-full"><Wallet size={24} /></div>
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group">
+          <p className="text-rose-500/60 text-[10px] font-black uppercase tracking-widest mb-1">Despesas Confirmadas</p>
+          <h3 className="text-3xl font-black text-rose-600">{formatMoney(estatisticas?.geral.saida || 0)}</h3>
+          <div className="mt-2 text-[10px] text-rose-600/70 font-bold">- {formatMoney(estatisticas?.previsao.saida)} a pagar</div>
         </div>
       </div>
 
-      {/* GRÁFICOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      {/* 3. SALDO POR BANCOS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {Object.entries(estatisticas?.saldosPorBanco || {}).map(([banco, saldo]) => (
+          <div key={banco} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-2 text-slate-400 mb-1">
+              <Landmark size={14} />
+              <span className="text-[10px] font-black uppercase tracking-tighter">{banco}</span>
+            </div>
+            <p className={`text-sm font-black ${saldo >= 0 ? 'text-slate-700' : 'text-rose-500'}`}>{formatMoney(saldo)}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* 4. GRÁFICOS ANALÍTICOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-6 flex items-center gap-2"><TrendingUp size={18} /> Balanço Mensal</h3>
+          <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-8 flex items-center gap-2">
+            <BarChart3 size={18} className="text-blue-600" /> Fluxo de Caixa (6 Meses)
+          </h3>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={estatisticas.graficoBarra}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(value) => `R$ ${value/1000}k`} />
-                <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}} />
-                <Bar dataKey="Entradas" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
-                <Bar dataKey="Saídas" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={30} />
+              <BarChart data={estatisticas?.graficoBarra}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} dy={10} />
+                <YAxis hide />
+                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Bar dataKey="Entradas" fill="#10b981" radius={[4, 4, 0, 0]} barSize={25} />
+                <Bar dataKey="Saídas" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={25} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wide mb-6 flex items-center gap-2"><ArrowUpCircle size={18} /> Maiores Entradas</h3>
-          <div className="h-64 w-full relative">
-            {estatisticas.graficoPizzaReceita.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={estatisticas.graficoPizzaReceita} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
-                    {estatisticas.graficoPizzaReceita.map((entry, index) => <Cell key={`cell-${index}`} fill={CORES_RECEITA[index % CORES_RECEITA.length]} stroke="none" />)}
-                  </Pie>
-                  <Tooltip formatter={(value) => formatMoney(value)} />
-                  <Legend layout="vertical" verticalAlign="middle" align="right" iconType="circle" wrapperStyle={{fontSize: '11px'}} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-slate-400 text-xs">Sem dados.</div>}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wide mb-6 flex items-center gap-2"><ArrowDownCircle size={18} /> Maiores Despesas</h3>
-          <div className="h-64 w-full relative">
-            {estatisticas.graficoPizzaDespesa.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={estatisticas.graficoPizzaDespesa} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
-                    {estatisticas.graficoPizzaDespesa.map((entry, index) => <Cell key={`cell-${index}`} fill={CORES_DESPESA[index % CORES_DESPESA.length]} stroke="none" />)}
-                  </Pie>
-                  <Tooltip formatter={(value) => formatMoney(value)} />
-                  <Legend layout="vertical" verticalAlign="middle" align="right" iconType="circle" wrapperStyle={{fontSize: '11px'}} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-slate-400 text-xs">Sem dados.</div>}
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-8 flex items-center gap-2">
+            <UserCheck size={18} className="text-indigo-600" /> Composição PJ / PF
+          </h3>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={estatisticas?.graficoTipo} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">
+                  {estatisticas?.graficoTipo.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={CORES_TIPO[index % CORES_TIPO.length]} stroke="none" />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend iconType="circle" wrapperStyle={{fontSize: '12px', fontWeight: 'bold'}} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
@@ -288,23 +257,14 @@ export default function Home() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-8 fade-in h-screen pb-10">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-100 animate-pulse">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-slate-200 rounded-full"></div>
-          <div className="space-y-2">
-            <div className="h-6 w-48 bg-slate-200 rounded"></div>
-            <div className="h-4 w-32 bg-slate-200 rounded"></div>
-          </div>
-        </div>
-        <div className="h-10 w-32 bg-slate-200 rounded-xl"></div>
+    <div className="space-y-8 animate-pulse p-6">
+      <div className="h-24 bg-slate-100 rounded-2xl w-full"></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="h-32 bg-slate-100 rounded-2xl"></div>
+        <div className="h-32 bg-slate-100 rounded-2xl"></div>
+        <div className="h-32 bg-slate-100 rounded-2xl"></div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
-        <div className="h-40 bg-slate-200 rounded-2xl"></div>
-        <div className="h-40 bg-slate-200 rounded-2xl"></div>
-        <div className="h-40 bg-slate-200 rounded-2xl"></div>
-      </div>
-      <div className="h-72 bg-slate-200 rounded-2xl animate-pulse"></div>
+      <div className="h-72 bg-slate-100 rounded-2xl w-full"></div>
     </div>
   );
 }

@@ -14,15 +14,16 @@ export default function RootLayout({ children }) {
   return (
     <html lang="pt-BR">
       <body className={`${inter.className} bg-slate-50 text-slate-900`}>
-        <div className="min-h-screen flex">
+        <div className="min-h-screen flex flex-col md:flex-row">
           
-          {/* Sidebar só aparece se NÃO for login */}
           {!isLoginPage && <Sidebar />}
 
-          {/* Se for login: Ocupa 100% da largura (w-full) e sem p-8 (padding)
-              Se não for: Tem a margem da sidebar (ml-64) e padding (p-8)
-          */}
-          <main className={`flex-1 flex flex-col ${!isLoginPage ? 'ml-64 p-8' : 'w-full'}`}>
+          <main className={`
+            flex-1 flex flex-col transition-all duration-300
+            ${!isLoginPage 
+              ? 'p-4 md:p-8 md:ml-64 mt-14 md:mt-0' 
+              : 'w-full'}
+          `}>
             {children}
           </main>
 
