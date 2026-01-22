@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, 
   Wallet, AlertCircle, CheckCircle2, X, Search, ChevronLeft, ChevronRight, 
-  Landmark, ChevronDown, ChevronUp, Layers, Calendar, Tag
+  Landmark, ChevronDown, ChevronUp, Layers, Calendar, Tag, CreditCard
 } from 'lucide-react';
 
 export default function Lancamentos() {
@@ -24,6 +24,7 @@ export default function Lancamentos() {
 
   const bancos = ["CAIXA", "ITAU", "BRADESCO", "SANTANDER"];
   const categoriasGerais = ["COMBUSTIVEL", "MANUTENCAO", "PECAS", "SALARIOS", "ALIMENTACAO", "ALUGUEL", "IMPOSTOS", "SERVICOS", "VENDAS", "OUTROS"];
+  const formasPagamento = ["PIX", "BOLETO", "TED", "CARTAO DEBITO", "CREDITO", "DINHEIRO"];
 
   const carregarDados = async () => {
     try {
@@ -138,7 +139,7 @@ export default function Lancamentos() {
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
             <Trash2 size={32} className="mx-auto text-rose-500 mb-4" />
             <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Excluir Registro?</h3>
-            <p className="text-slate-500 text-[10px] font-bold mb-6">ESSA AÇÃO REMOVERÁ O LANÇAMENTO E TODAS AS SUAS PARCELAS DO BANCO.</p>
+            <p className="text-slate-500 text-[10px] font-bold mb-6 tracking-wide">ISSO REMOVERÁ O GRUPO COMPLETO DE PARCELAS.</p>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setModalConfirmacao({ aberto: false, id: null, descricao: '' })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase">Voltar</button>
               <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest">Excluir</button>
@@ -161,7 +162,7 @@ export default function Lancamentos() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm" />
           </div>
-          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg"><Plus size={16} /> Novo Registro</button>
+          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-100"><Plus size={16} /> Novo Registro</button>
         </div>
       </div>
 
@@ -172,7 +173,7 @@ export default function Lancamentos() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest">
                 <th className="p-6 text-center">Data</th>
-                <th className="p-6">Descrição / Banco</th>
+                <th className="p-6">Descrição / Informações</th>
                 <th className="p-6 text-center">Status / Progresso</th>
                 <th className="p-6 text-right">Valor Parcela</th>
                 <th className="p-6 text-center">Ações</th>
@@ -213,8 +214,8 @@ export default function Lancamentos() {
                               {baseName}
                               {item.totalParcelas > 1 && <span className="ml-2 text-[9px] bg-white/60 px-2 py-0.5 rounded text-slate-600 font-black border border-slate-200">{item.totalParcelas}X</span>}
                             </span>
-                            <span className="text-[9px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                              {item.banco} | {item.categoria}
+                            <span className="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-0.5">
+                              <Landmark size={10}/> {item.banco} | <Tag size={10}/> {item.categoria} | <CreditCard size={10}/> {item.formaPagamento}
                             </span>
                           </div>
                         </div>
@@ -244,8 +245,11 @@ export default function Lancamentos() {
                     {estaAberto && parcelasDoGrupo.map((parc) => (
                       <tr key={parc.id} className={`animate-in slide-in-from-top-1 duration-200 ${isEntrada ? 'bg-emerald-50/60' : 'bg-rose-50/60'}`}>
                         <td className="p-4 text-center text-[10px] text-slate-600 font-black">{formatarDataExibicao(parc.data)}</td>
-                        <td className="p-4 pl-16 font-bold text-slate-600 text-[11px] uppercase">
-                          {parc.descricao} 
+                        <td className="p-4 pl-16">
+                           <div className="flex flex-col">
+                              <span className="font-bold text-slate-600 text-[11px] uppercase">{parc.descricao}</span>
+                              <span className="text-[7px] font-black text-slate-400 uppercase">{parc.formaPagamento}</span>
+                           </div>
                         </td>
                         <td className="p-4 text-center">
                            <button disabled={processandoId === parc.id} onClick={() => handleAlternarStatus(parc)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase ${
@@ -256,10 +260,7 @@ export default function Lancamentos() {
                         <td className={`p-4 text-right font-bold text-xs ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </td>
-                        <td className="p-4 text-center">
-                          {/* Lixeira removida daqui por segurança */}
-                          <div className="w-8 h-8 mx-auto flex items-center justify-center opacity-20"><Tag size={12}/></div>
-                        </td>
+                        <td className="p-4 text-center opacity-10"><Tag size={12}/></td>
                       </tr>
                     ))}
                   </React.Fragment>
@@ -289,12 +290,18 @@ export default function Lancamentos() {
               </div>
               <div>
                 <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Valor Total (R$)</label>
-                <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+                <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" placeholder="0.00" />
               </div>
               <div>
                 <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Categoria</label>
                 <select value={novoItem.categoria} onChange={e => setNovoItem({...novoItem, categoria: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
                   {categoriasGerais.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Forma Pagamento</label>
+                <select value={novoItem.formaPagamento} onChange={e => setNovoItem({...novoItem, formaPagamento: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                  {formasPagamento.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
               <div>
@@ -317,7 +324,7 @@ export default function Lancamentos() {
                 </select>
               </div>
               <div className="md:col-span-3 pt-4">
-                <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl">
+                <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50">
                   {isSalvando ? <Loader2 className="animate-spin" size={20} /> : `Processar Lançamento`}
                 </button>
               </div>
