@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, 
   Wallet, AlertCircle, CheckCircle2, X, Search, ChevronLeft, ChevronRight, 
-  Landmark, ChevronDown, ChevronUp, Layers, Calendar
+  Landmark, ChevronDown, ChevronUp, Layers, Calendar, Tag
 } from 'lucide-react';
 
 export default function Lancamentos() {
@@ -23,6 +23,7 @@ export default function Lancamentos() {
   const [notificacao, setNotificacao] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
   const bancos = ["CAIXA", "ITAU", "BRADESCO", "SANTANDER"];
+  const categoriasGerais = ["COMBUSTIVEL", "MANUTENCAO", "PECAS", "SALARIOS", "ALIMENTACAO", "ALUGUEL", "IMPOSTOS", "SERVICOS", "VENDAS", "OUTROS"];
 
   const carregarDados = async () => {
     try {
@@ -110,16 +111,13 @@ export default function Lancamentos() {
   const confirmarExclusao = async () => {
     const id = modalConfirmacao.id;
     const baseName = modalConfirmacao.descricao.split(' (')[0];
-    
     setModalConfirmacao({ aberto: false, id: null, descricao: '' });
     setProcessandoId(id);
-    
     try {
       const res = await fetch(`/api/lancamentos/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        // Remove todo o grupo da visualização local
         setTransacoes(prev => prev.filter(item => !item.descricao.startsWith(baseName)));
-        exibirNotificacao("Removido com sucesso!");
+        exibirNotificacao("Lançamento removido!");
       }
     } catch (error) { exibirNotificacao("Erro ao excluir", "erro"); }
     finally { setProcessandoId(null); }
@@ -139,11 +137,11 @@ export default function Lancamentos() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
             <Trash2 size={32} className="mx-auto text-rose-500 mb-4" />
-            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Excluir Grupo?</h3>
-            <p className="text-slate-500 text-xs mb-6">Isso apagará todas as parcelas vinculadas a este lançamento.</p>
+            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Excluir Registro?</h3>
+            <p className="text-slate-500 text-[10px] font-bold mb-6">ESSA AÇÃO REMOVERÁ O LANÇAMENTO E TODAS AS SUAS PARCELAS DO BANCO.</p>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setModalConfirmacao({ aberto: false, id: null, descricao: '' })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase">Voltar</button>
-              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg uppercase">Excluir Tudo</button>
+              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest">Excluir</button>
             </div>
           </div>
         </div>
@@ -155,19 +153,19 @@ export default function Lancamentos() {
           <div className="p-3 bg-white border border-slate-100 shadow-sm rounded-2xl text-blue-600"><Wallet size={28} /></div>
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">Lançamentos</h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Gestão Pillar Finance</p>
+            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Controle de Fluxo Analítico</p>
           </div>
         </div>
         <div className="flex gap-3 w-full lg:w-auto">
           <div className="relative flex-1 lg:w-64">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="Buscar lançamento..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm transition-all" />
+            <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm" />
           </div>
-          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-100"><Plus size={16} /> Novo Registro</button>
+          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg"><Plus size={16} /> Novo Registro</button>
         </div>
       </div>
 
-      {/* TABELA COM SOMBREAMENTO INTENSO */}
+      {/* TABELA */}
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left">
@@ -195,10 +193,7 @@ export default function Lancamentos() {
 
                 const pagas = parcelasDoGrupo.filter(t => t.status === 'PAGO').length;
                 const isEntrada = item.tipo === 'ENTRADA';
-                
-                const corFundo = isEntrada 
-                  ? 'bg-emerald-100/50 hover:bg-emerald-100/80' 
-                  : 'bg-rose-100/50 hover:bg-rose-100/80';
+                const corFundo = isEntrada ? 'bg-emerald-100/50 hover:bg-emerald-100/80' : 'bg-rose-100/50 hover:bg-rose-100/80';
 
                 return (
                   <React.Fragment key={item.id}>
@@ -218,7 +213,9 @@ export default function Lancamentos() {
                               {baseName}
                               {item.totalParcelas > 1 && <span className="ml-2 text-[9px] bg-white/60 px-2 py-0.5 rounded text-slate-600 font-black border border-slate-200">{item.totalParcelas}X</span>}
                             </span>
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">{item.banco} | {item.tipoConta}</span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                              {item.banco} | {item.categoria}
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -260,7 +257,8 @@ export default function Lancamentos() {
                           {Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </td>
                         <td className="p-4 text-center">
-                          <button onClick={() => setModalConfirmacao({ aberto: true, id: parc.id, descricao: parc.descricao })} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
+                          {/* Lixeira removida daqui por segurança */}
+                          <div className="w-8 h-8 mx-auto flex items-center justify-center opacity-20"><Tag size={12}/></div>
                         </td>
                       </tr>
                     ))}
@@ -269,15 +267,6 @@ export default function Lancamentos() {
               })}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* PAGINAÇÃO */}
-      <div className="p-6 bg-white border border-slate-100 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Página {paginaAtual} de {totalPaginas || 1}</span>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <button disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm transition-all"><ChevronLeft size={18} /></button>
-          <button disabled={paginaAtual === totalPaginas || totalPaginas === 0} onClick={() => setPaginaAtual(p => p + 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm transition-all"><ChevronRight size={18} /></button>
         </div>
       </div>
 
@@ -300,7 +289,13 @@ export default function Lancamentos() {
               </div>
               <div>
                 <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Valor Total (R$)</label>
-                <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" placeholder="0.00" />
+                <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Categoria</label>
+                <select value={novoItem.categoria} onChange={e => setNovoItem({...novoItem, categoria: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                  {categoriasGerais.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Banco</label>
@@ -309,37 +304,21 @@ export default function Lancamentos() {
                 </select>
               </div>
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Tipo Conta</label>
-                <select value={novoItem.tipoConta} onChange={e => setNovoItem({...novoItem, tipoConta: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
-                  <option value="PJ">PJ</option>
-                  <option value="PF">PF</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Movimento</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Fluxo</label>
                 <select value={novoItem.tipo} onChange={e => setNovoItem({...novoItem, tipo: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none">
                   <option value="ENTRADA">RECEITA (+)</option>
                   <option value="SAIDA">DESPESA (-)</option>
                 </select>
               </div>
-              <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Pagamento / Parcelas</label>
-                <div className="flex gap-2">
-                   <select value={novoItem.formaPagamento} onChange={e => setNovoItem({...novoItem, formaPagamento: e.target.value})} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm">
-                      <option value="PIX">PIX</option>
-                      <option value="BOLETO">BOLETO</option>
-                      <option value="TED">TED</option>
-                      <option value="CARTAO">DÉBITO</option>
-                      <option value="CREDITO">CRÉDITO</option>
-                   </select>
-                   <select value={novoItem.parcelas} onChange={e => setNovoItem({...novoItem, parcelas: e.target.value})} className="w-20 p-3 bg-blue-50 border border-blue-200 rounded-xl font-black text-blue-700 text-sm">
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
-                   </select>
-                </div>
+              <div className="md:col-span-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase mb-1.5 block ml-1">Parcelas</label>
+                <select value={novoItem.parcelas} onChange={e => setNovoItem({...novoItem, parcelas: e.target.value})} className="w-full p-3 bg-blue-50 border border-blue-200 rounded-xl font-black text-blue-700 text-sm">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
+                </select>
               </div>
               <div className="md:col-span-3 pt-4">
-                <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all flex justify-center items-center shadow-xl disabled:opacity-50">
-                  {isSalvando ? <Loader2 className="animate-spin" size={20} /> : `Criar Lançamento`}
+                <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl">
+                  {isSalvando ? <Loader2 className="animate-spin" size={20} /> : `Processar Lançamento`}
                 </button>
               </div>
             </form>
