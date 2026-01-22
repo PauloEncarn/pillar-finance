@@ -19,7 +19,7 @@ export default function Lancamentos() {
 
   const [gruposAbertos, setGruposAbertos] = useState({});
   const [modalAberto, setModalAberto] = useState(false);
-  const [modalConfirmacao, setModalConfirmacao] = useState({ aberto: false, id: null });
+  const [modalConfirmacao, setModalConfirmacao] = useState({ aberto: false, id: null, descricao: '' });
   const [notificacao, setNotificacao] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
   const bancos = ["CAIXA", "ITAU", "BRADESCO", "SANTANDER"];
@@ -109,13 +109,17 @@ export default function Lancamentos() {
 
   const confirmarExclusao = async () => {
     const id = modalConfirmacao.id;
-    setModalConfirmacao({ aberto: false, id: null });
+    const baseName = modalConfirmacao.descricao.split(' (')[0];
+    
+    setModalConfirmacao({ aberto: false, id: null, descricao: '' });
     setProcessandoId(id);
+    
     try {
       const res = await fetch(`/api/lancamentos/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setTransacoes(prev => prev.filter(item => item.id !== id));
-        exibirNotificacao("Removido!");
+        // Remove todo o grupo da visualização local
+        setTransacoes(prev => prev.filter(item => !item.descricao.startsWith(baseName)));
+        exibirNotificacao("Removido com sucesso!");
       }
     } catch (error) { exibirNotificacao("Erro ao excluir", "erro"); }
     finally { setProcessandoId(null); }
@@ -135,10 +139,11 @@ export default function Lancamentos() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
             <Trash2 size={32} className="mx-auto text-rose-500 mb-4" />
-            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase">Excluir?</h3>
+            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Excluir Grupo?</h3>
+            <p className="text-slate-500 text-xs mb-6">Isso apagará todas as parcelas vinculadas a este lançamento.</p>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setModalConfirmacao({ aberto: false, id: null })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs">VOLTAR</button>
-              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg">EXCLUIR</button>
+              <button onClick={() => setModalConfirmacao({ aberto: false, id: null, descricao: '' })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase">Voltar</button>
+              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg uppercase">Excluir Tudo</button>
             </div>
           </div>
         </div>
@@ -150,15 +155,15 @@ export default function Lancamentos() {
           <div className="p-3 bg-white border border-slate-100 shadow-sm rounded-2xl text-blue-600"><Wallet size={28} /></div>
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">Lançamentos</h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Gestão Pillar Finance</p>
+            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Gestão Pillar Finance</p>
           </div>
         </div>
         <div className="flex gap-3 w-full lg:w-auto">
           <div className="relative flex-1 lg:w-64">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm" />
+            <input type="text" placeholder="Buscar lançamento..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm transition-all" />
           </div>
-          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-lg shadow-blue-100"><Plus size={16} /> Novo Registro</button>
+          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-100"><Plus size={16} /> Novo Registro</button>
         </div>
       </div>
 
@@ -191,14 +196,12 @@ export default function Lancamentos() {
                 const pagas = parcelasDoGrupo.filter(t => t.status === 'PAGO').length;
                 const isEntrada = item.tipo === 'ENTRADA';
                 
-                // Estilo do sombreamento
                 const corFundo = isEntrada 
                   ? 'bg-emerald-100/50 hover:bg-emerald-100/80' 
                   : 'bg-rose-100/50 hover:bg-rose-100/80';
 
                 return (
                   <React.Fragment key={item.id}>
-                    {/* LINHA PAI */}
                     <tr className={`transition-all ${corFundo}`}>
                       <td className="p-6 text-center">
                         <span className="text-xs text-slate-600 font-black">{formatarDataExibicao(item.data)}</span>
@@ -237,11 +240,10 @@ export default function Lancamentos() {
                         {isEntrada ? '+ ' : '- '}{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </td>
                       <td className="p-6 text-center">
-                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id })} className="p-2 text-slate-500 hover:text-rose-600 transition-all"><Trash2 size={18} /></button>
+                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id, descricao: item.descricao })} className="p-2 text-slate-500 hover:text-rose-600 transition-all"><Trash2 size={18} /></button>
                       </td>
                     </tr>
 
-                    {/* FILHOS EXPANDIDOS */}
                     {estaAberto && parcelasDoGrupo.map((parc) => (
                       <tr key={parc.id} className={`animate-in slide-in-from-top-1 duration-200 ${isEntrada ? 'bg-emerald-50/60' : 'bg-rose-50/60'}`}>
                         <td className="p-4 text-center text-[10px] text-slate-600 font-black">{formatarDataExibicao(parc.data)}</td>
@@ -258,7 +260,7 @@ export default function Lancamentos() {
                           {Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </td>
                         <td className="p-4 text-center">
-                          <button onClick={() => setModalConfirmacao({ aberto: true, id: parc.id })} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
+                          <button onClick={() => setModalConfirmacao({ aberto: true, id: parc.id, descricao: parc.descricao })} className="p-1 text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
                         </td>
                       </tr>
                     ))}
@@ -274,8 +276,8 @@ export default function Lancamentos() {
       <div className="p-6 bg-white border border-slate-100 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Página {paginaAtual} de {totalPaginas || 1}</span>
         <div className="flex gap-2 w-full sm:w-auto">
-          <button disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm"><ChevronLeft size={18} /></button>
-          <button disabled={paginaAtual === totalPaginas || totalPaginas === 0} onClick={() => setPaginaAtual(p => p + 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm"><ChevronRight size={18} /></button>
+          <button disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm transition-all"><ChevronLeft size={18} /></button>
+          <button disabled={paginaAtual === totalPaginas || totalPaginas === 0} onClick={() => setPaginaAtual(p => p + 1)} className="flex-1 sm:flex-none p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 shadow-sm transition-all"><ChevronRight size={18} /></button>
         </div>
       </div>
 
@@ -337,7 +339,7 @@ export default function Lancamentos() {
               </div>
               <div className="md:col-span-3 pt-4">
                 <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all flex justify-center items-center shadow-xl disabled:opacity-50">
-                  {isSalvando ? <Loader2 className="animate-spin" size={20} /> : `Processar Lançamento`}
+                  {isSalvando ? <Loader2 className="animate-spin" size={20} /> : `Criar Lançamento`}
                 </button>
               </div>
             </form>
