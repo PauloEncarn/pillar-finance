@@ -1,79 +1,122 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+/**
+ * MÉTODO PATCH: Responsável por EDITAR ou LIQUIDAR (Baixa/Parcelamento)
+ */
 export async function PATCH(request, { params }) {
+  const { id } = await params;
+  console.log(`>>> [PATCH /api/lancamentos/${id}] Iniciando processamento...`);
+  
   try {
-    const { id } = await params;
     const body = await request.json();
     
-    // Dados que vêm do Modal de Pagamento
-    const { banco, formaPagamento, parcelas, dataPagamento } = body;
-
-    const numParcelas = parseInt(parcelas) || 1;
-    const dataBase = new Date(dataPagamento);
-
-    // 1. Busca o compromisso original (Passo 1)
+    // 1. Verificar se o registro existe
     const itemOriginal = await prisma.lancamento.findUnique({ where: { id } });
-    if (!itemOriginal) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
-
-    const valorTotal = Number(itemOriginal.valor);
-    const valorDaParcela = valorTotal / numParcelas;
-
-    // 2. Se for PARCELADO ou FINANCIAMENTO (> 1)
-    if (numParcelas > 1) {
-      const novasParcelas = [];
-
-      for (let i = 0; i < numParcelas; i++) {
-        const vcto = new Date(dataBase);
-        vcto.setMonth(dataBase.getMonth() + i);
-
-        novasParcelas.push({
-          descricao: `${itemOriginal.descricao} (${i + 1}/${numParcelas})`,
-          valor: valorDaParcela,
-          tipo: itemOriginal.tipo,
-          categoria: itemOriginal.categoria,
-          tipoConta: itemOriginal.tipoConta,
-          status: i === 0 ? 'PAGO' : 'PENDENTE', // A 1ª parcela já nasce paga
-          data: vcto,
-          banco,
-          formaPagamento,
-          parcelaAtual: i + 1,
-          totalParcelas: numParcelas
-        });
-      }
-
-      // MATAMOS O REGISTRO ÚNICO E CRIAMOS O FLUXO PARCELADO
-      await prisma.transaction([
-        prisma.lancamento.delete({ where: { id } }),
-        prisma.lancamento.createMany({ data: novasParcelas })
-      ]);
-
-      return NextResponse.json({ message: 'Financiamento gerado!' });
+    if (!itemOriginal) {
+      console.warn(">>> [PATCH] Registro não encontrado.");
+      return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
     }
 
-    // 3. SE FOR À VISTA (1x)
-    const atualizado = await prisma.lancamento.update({
+    // --- LÓGICA A: LIQUIDAÇÃO / FINANCIAMENTO ---
+    // Se o body contiver 'parcelas', entendemos que é uma BAIXA
+    if (body.parcelas) {
+      const numParcelas = parseInt(body.parcelas) || 1;
+      const dataBase = new Date(body.dataPagamento);
+      const valorTotal = Number(itemOriginal.valor);
+      const valorParcela = valorTotal / numParcelas;
+
+      if (numParcelas > 1) {
+        console.log(`>>> [PATCH] Gerando financiamento de ${numParcelas}x`);
+        const novasParcelas = [];
+
+        for (let i = 0; i < numParcelas; i++) {
+          const vcto = new Date(dataBase);
+          vcto.setMonth(dataBase.getMonth() + i);
+
+          novasParcelas.push({
+            descricao: `${itemOriginal.descricao} (${i + 1}/${numParcelas})`,
+            valor: valorParcela,
+            tipo: itemOriginal.tipo,
+            categoria: itemOriginal.categoria,
+            tipoConta: itemOriginal.tipoConta,
+            status: i === 0 ? 'PAGO' : 'PENDENTE',
+            data: vcto,
+            banco: body.banco,
+            formaPagamento: body.formaPagamento,
+            parcelaAtual: i + 1,
+            totalParcelas: numParcelas
+          });
+        }
+
+        // Transação: Deleta o original e cria a árvore de parcelas
+        await prisma.$transaction([
+          prisma.lancamento.delete({ where: { id } }),
+          prisma.lancamento.createMany({ data: novasParcelas })
+        ]);
+
+        return NextResponse.json({ message: 'Financiamento gerado com sucesso' });
+      }
+
+      // Baixa à vista (1x)
+      const liquidado = await prisma.lancamento.update({
+        where: { id },
+        data: {
+          status: 'PAGO',
+          banco: body.banco,
+          formaPagamento: body.formaPagamento,
+          data: dataBase
+        }
+      });
+      return NextResponse.json(liquidado);
+    }
+
+    // --- LÓGICA B: EDIÇÃO SIMPLES ---
+    // Se não houver 'parcelas', é uma edição dos campos do agendamento
+    console.log(">>> [PATCH] Realizando edição de campos.");
+    const editado = await prisma.lancamento.update({
       where: { id },
       data: {
-        status: 'PAGO',
-        banco,
-        formaPagamento,
-        data: dataBase
+        descricao: body.descricao,
+        valor: parseFloat(body.valor),
+        tipo: body.tipo,
+        categoria: body.categoria,
+        tipoConta: body.tipoConta,
+        data: new Date(body.data)
       }
     });
 
-    return NextResponse.json(atualizado);
+    return NextResponse.json(editado);
 
   } catch (error) {
-    console.error("Erro na liquidação:", error);
-    return NextResponse.json({ error: 'Erro ao processar baixa' }, { status: 500 });
+    console.error(">>> [PATCH] ERRO TÉCNICO:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
+/**
+ * MÉTODO DELETE: Responsável por excluir o registro
+ */
 export async function DELETE(request, { params }) {
+  const { id } = await params;
+  console.log(`>>> [DELETE /api/lancamentos/${id}] Excluindo registro...`);
+
   try {
-    const { id } = await params;
+    // 1. Primeiro verificamos se ele ainda existe
+    const existe = await prisma.lancamento.findUnique({ where: { id } });
+
+    if (!existe) {
+      console.log(">>> [DELETE] Registro já não existia mais, ignorando...");
+      return NextResponse.json({ message: 'Registro já removido anteriormente' });
+    }
+
+    // 2. Só tenta apagar se ele existir
     await prisma.lancamento.delete({ where: { id } });
-    return NextResponse.json({ message: 'Excluído' });
-  } catch (error) { return NextResponse.json({ error: 'Erro' }, { status: 500 }); }
+    
+    console.log(">>> [DELETE] Sucesso!");
+    return NextResponse.json({ message: 'Excluído com sucesso' });
+  } catch (error) {
+    console.error(">>> [DELETE] ERRO INESPERADO:", error.message);
+    return NextResponse.json({ error: 'Erro ao processar exclusão' }, { status: 500 });
+  }
 }
