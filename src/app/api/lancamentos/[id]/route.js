@@ -1,43 +1,25 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// ATUALIZAR / EFETIVAR BAIXA (PATCH)
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
     
-    // Extraímos os dados que vêm do modal de "Lançar Pagamento"
-    const { banco, formaPagamento, parcelas, dataPagamento, status } = body;
+    // Dados que vêm do Modal de Pagamento
+    const { banco, formaPagamento, parcelas, dataPagamento } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: 'ID não fornecido' }, { status: 400 });
-    }
-
-    // 1. Buscamos o registro original que está como PENDENTE
-    const itemOriginal = await prisma.lancamento.findUnique({
-      where: { id: id },
-    });
-
-    if (!itemOriginal) {
-      return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
-    }
-
-    // Se no corpo do request NÃO vier "parcelas", significa que é uma atualização simples de status
-    if (!parcelas) {
-        const atualizado = await prisma.lancamento.update({
-            where: { id },
-            data: { status: status || 'PAGO' }
-        });
-        return NextResponse.json(atualizado);
-    }
-
-    // 2. LÓGICA DE BAIXA COM PARCELAMENTO / FINANCIAMENTO
     const numParcelas = parseInt(parcelas) || 1;
-    const dataBase = new Date(dataPagamento || itemOriginal.data);
-    const valorTotal = Number(itemOriginal.valor);
-    const valorParcela = valorTotal / numParcelas;
+    const dataBase = new Date(dataPagamento);
 
+    // 1. Busca o compromisso original (Passo 1)
+    const itemOriginal = await prisma.lancamento.findUnique({ where: { id } });
+    if (!itemOriginal) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
+
+    const valorTotal = Number(itemOriginal.valor);
+    const valorDaParcela = valorTotal / numParcelas;
+
+    // 2. Se for PARCELADO ou FINANCIAMENTO (> 1)
     if (numParcelas > 1) {
       const novasParcelas = [];
 
@@ -47,33 +29,35 @@ export async function PATCH(request, { params }) {
 
         novasParcelas.push({
           descricao: `${itemOriginal.descricao} (${i + 1}/${numParcelas})`,
-          valor: valorParcela,
+          valor: valorDaParcela,
           tipo: itemOriginal.tipo,
           categoria: itemOriginal.categoria,
           tipoConta: itemOriginal.tipoConta,
-          status: i === 0 ? 'PAGO' : 'PENDENTE', // Primeira paga, demais pendentes
+          status: i === 0 ? 'PAGO' : 'PENDENTE', // A 1ª parcela já nasce paga
           data: vcto,
-          banco: banco,
-          formaPagamento: formaPagamento,
+          banco,
+          formaPagamento,
           parcelaAtual: i + 1,
           totalParcelas: numParcelas
         });
       }
 
-      // IMPORTANTE: Deletamos o registro "rascunho" e criamos os registros reais parcelados
-      await prisma.lancamento.delete({ where: { id: id } });
-      await prisma.lancamento.createMany({ data: novasParcelas });
+      // MATAMOS O REGISTRO ÚNICO E CRIAMOS O FLUXO PARCELADO
+      await prisma.transaction([
+        prisma.lancamento.delete({ where: { id } }),
+        prisma.lancamento.createMany({ data: novasParcelas })
+      ]);
 
-      return NextResponse.json({ message: 'Financiamento gerado e item original baixado.' });
+      return NextResponse.json({ message: 'Financiamento gerado!' });
     }
 
-    // 3. PAGAMENTO À VISTA (1 parcela)
+    // 3. SE FOR À VISTA (1x)
     const atualizado = await prisma.lancamento.update({
       where: { id },
       data: {
         status: 'PAGO',
-        banco: banco,
-        formaPagamento: formaPagamento,
+        banco,
+        formaPagamento,
         data: dataBase
       }
     });
@@ -81,44 +65,15 @@ export async function PATCH(request, { params }) {
     return NextResponse.json(atualizado);
 
   } catch (error) {
-    console.error("Erro no PATCH [id]:", error);
-    return NextResponse.json({ error: 'Erro ao processar a baixa' }, { status: 500 });
+    console.error("Erro na liquidação:", error);
+    return NextResponse.json({ error: 'Erro ao processar baixa' }, { status: 500 });
   }
 }
 
-// DELETAR (DELETE) - Mantendo sua lógica de apagar o grupo todo
 export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
-
-    const itemAlvo = await prisma.lancamento.findUnique({
-      where: { id: id },
-    });
-
-    if (!itemAlvo) {
-      return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
-    }
-
-    // Se for parte de um parcelamento, deleta o grupo pelo nome base
-    if (itemAlvo.totalParcelas > 1) {
-      const baseName = itemAlvo.descricao.split(' (')[0];
-      await prisma.lancamento.deleteMany({
-        where: {
-          descricao: { startsWith: baseName },
-          tipo: itemAlvo.tipo,
-          valor: itemAlvo.valor // Segurança extra: mesmo valor de parcela
-        },
-      });
-      return NextResponse.json({ message: 'Grupo excluído' });
-    } 
-    
-    // Lançamento único
-    await prisma.lancamento.delete({ where: { id: id } });
-
-    return NextResponse.json({ message: 'Excluído com sucesso' });
-
-  } catch (error) {
-    console.error("Erro no DELETE [id]:", error);
-    return NextResponse.json({ error: 'Erro ao excluir' }, { status: 500 });
-  }
+    await prisma.lancamento.delete({ where: { id } });
+    return NextResponse.json({ message: 'Excluído' });
+  } catch (error) { return NextResponse.json({ error: 'Erro' }, { status: 500 }); }
 }
