@@ -6,33 +6,23 @@ import prisma from '@/lib/prisma';
  */
 export async function PATCH(request, { params }) {
   const { id } = await params;
-  console.log(`>>> [PATCH /api/lancamentos/${id}] Iniciando processamento...`);
-  
   try {
     const body = await request.json();
-    
-    // 1. Verificar se o registro existe
     const itemOriginal = await prisma.lancamento.findUnique({ where: { id } });
-    if (!itemOriginal) {
-      console.warn(">>> [PATCH] Registro não encontrado.");
-      return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
-    }
 
-    // --- LÓGICA A: LIQUIDAÇÃO / FINANCIAMENTO ---
-    // Se o body contiver 'parcelas', entendemos que é uma BAIXA
+    if (!itemOriginal) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
+
+    // LÓGICA DE BAIXA / FINANCIAMENTO
     if (body.parcelas) {
       const numParcelas = parseInt(body.parcelas) || 1;
-      const dataBase = new Date(body.dataPagamento);
-      const valorTotal = Number(itemOriginal.valor);
-      const valorParcela = valorTotal / numParcelas;
+      const dataLiquidacao = new Date(body.dataPagamento); // Data vinda do modal de baixa
+      const valorParcela = Number(itemOriginal.valor) / numParcelas;
 
       if (numParcelas > 1) {
-        console.log(`>>> [PATCH] Gerando financiamento de ${numParcelas}x`);
         const novasParcelas = [];
-
         for (let i = 0; i < numParcelas; i++) {
-          const vcto = new Date(dataBase);
-          vcto.setMonth(dataBase.getMonth() + i);
+          const vcto = new Date(dataLiquidacao);
+          vcto.setMonth(dataLiquidacao.getMonth() + i);
 
           novasParcelas.push({
             descricao: `${itemOriginal.descricao} (${i + 1}/${numParcelas})`,
@@ -41,7 +31,7 @@ export async function PATCH(request, { params }) {
             categoria: itemOriginal.categoria,
             tipoConta: itemOriginal.tipoConta,
             status: i === 0 ? 'PAGO' : 'PENDENTE',
-            data: vcto,
+            data: vcto, // Data calculada a partir da baixa
             banco: body.banco,
             formaPagamento: body.formaPagamento,
             parcelaAtual: i + 1,
@@ -49,47 +39,41 @@ export async function PATCH(request, { params }) {
           });
         }
 
-        // Transação: Deleta o original e cria a árvore de parcelas
         await prisma.$transaction([
           prisma.lancamento.delete({ where: { id } }),
           prisma.lancamento.createMany({ data: novasParcelas })
         ]);
 
-        return NextResponse.json({ message: 'Financiamento gerado com sucesso' });
+        return NextResponse.json({ message: 'Financiamento gerado' });
       }
 
-      // Baixa à vista (1x)
-      const liquidado = await prisma.lancamento.update({
+      // Baixa à Vista
+      const atualizado = await prisma.lancamento.update({
         where: { id },
         data: {
           status: 'PAGO',
           banco: body.banco,
           formaPagamento: body.formaPagamento,
-          data: dataBase
+          data: dataLiquidacao // Define a data no momento da baixa
         }
       });
-      return NextResponse.json(liquidado);
+      return NextResponse.json(atualizado);
     }
 
-    // --- LÓGICA B: EDIÇÃO SIMPLES ---
-    // Se não houver 'parcelas', é uma edição dos campos do agendamento
-    console.log(">>> [PATCH] Realizando edição de campos.");
+    // Edição simples (sem parcelas)
     const editado = await prisma.lancamento.update({
       where: { id },
       data: {
         descricao: body.descricao,
         valor: parseFloat(body.valor),
-        tipo: body.tipo,
         categoria: body.categoria,
         tipoConta: body.tipoConta,
-        data: new Date(body.data)
+        tipo: body.tipo
       }
     });
-
     return NextResponse.json(editado);
 
   } catch (error) {
-    console.error(">>> [PATCH] ERRO TÉCNICO:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
