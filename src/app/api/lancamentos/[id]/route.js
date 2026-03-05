@@ -105,20 +105,35 @@ export async function PATCH(request, { params }) {
 // --- MÉTODO DELETE ---
 export async function DELETE(request, { params }) {
   const { id } = await params;
-  console.log(`>>> [DELETE] Solicitando exclusão do ID: ${id}`);
 
   try {
-    // Verificamos se existe antes de deletar para evitar erro 500 do Prisma
-    const existe = await prisma.lancamento.findUnique({ where: { id } });
-    
-    if (!existe) {
-      return NextResponse.json({ error: 'Registro já não existe' }, { status: 404 });
+    const item = await prisma.lancamento.findUnique({ where: { id } });
+
+    if (!item) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
+
+    // LÓGICA DE EXCLUSÃO EM CASCATA
+    // Se o nome tem o padrão "(1/42)", pegamos apenas o nome base para deletar o grupo
+    const baseName = item.descricao.split(' (')[0];
+
+    if (item.totalParcelas > 1) {
+      console.log(`>>> [DELETE] Removendo grupo: ${baseName}`);
+      await prisma.lancamento.deleteMany({
+        where: {
+          descricao: { startsWith: baseName },
+          tipoConta: item.tipoConta, // Segurança extra para não apagar homônimos
+          totalParcelas: item.totalParcelas
+        }
+      });
+    } else {
+      // Exclusão simples
+      await prisma.lancamento.delete({ where: { id } });
     }
 
-    await prisma.lancamento.delete({ where: { id } });
-    return NextResponse.json({ message: 'Excluído com sucesso' });
+    return NextResponse.json({ message: 'Removido com sucesso' });
   } catch (error) {
-    console.error(">>> [DELETE] ERRO:", error.message);
-    return NextResponse.json({ error: 'Erro ao excluir no banco de dados' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// O método PATCH (Update) pode continuar como está, 
+// pois o Frontend agora envia os campos certinhos.

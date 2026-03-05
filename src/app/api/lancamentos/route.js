@@ -22,78 +22,47 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  console.log(">>> [POST] Iniciando novo lançamento...");
   try {
     const body = await request.json();
-    
-    // Pegamos todos os campos que adicionamos no modal do page.js
-    const { 
-      descricao, valor, tipo, categoria, data, 
-      banco, tipoConta, formaPagamento, parcelas 
-    } = body;
-
-    if (!descricao || !valor || !data) {
-      return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
-    }
+    const { descricao, valor, tipo, categoria, data, banco, tipoConta, formaPagamento, parcelas } = body;
 
     const numParcelas = parseInt(parcelas) || 1;
-    const valorTotal = parseFloat(valor);
-    const valorParcela = valorTotal / numParcelas;
+    const valorParcela = parseFloat(valor) / numParcelas;
     const dataInicial = new Date(data);
 
-    // --- LÓGICA DE PARCELAMENTO ---
-    // Se for 1 parcela, usamos create. Se for mais, usamos createMany.
     if (numParcelas === 1) {
       const novo = await prisma.lancamento.create({
         data: {
           descricao,
-          valor: valorTotal,
-          tipo: tipo || 'SAIDA',
-          categoria: categoria || 'OUTROS',
-          status: 'PENDENTE',
-          data: dataInicial,
-          banco: banco || 'ITAU',
-          tipoConta: tipoConta || 'PJ',
-          formaPagamento: formaPagamento || 'PIX',
-          parcelaAtual: 1,
-          totalParcelas: 1
-        },
+          valor: parseFloat(valor),
+          tipo, categoria, data: dataInicial, banco, tipoConta, formaPagamento,
+          parcelaAtual: 1, totalParcelas: 1
+        }
       });
       return NextResponse.json(novo);
     }
 
-    // Gerando o array de parcelas para o loop
+    // Criando o grupo de parcelas
     const listaParcelas = [];
     for (let i = 0; i < numParcelas; i++) {
-      const dataVencimento = new Date(dataInicial);
-      // Adiciona i meses à data inicial
-      dataVencimento.setMonth(dataInicial.getMonth() + i);
+      const vcto = new Date(dataInicial);
+      vcto.setMonth(dataInicial.getMonth() + i);
 
       listaParcelas.push({
-        descricao: `${descricao} (${i + 1}/${numParcelas})`,
+        descricao: `${descricao} (${i + 1}/${numParcelas})`, // Padronização do nome
         valor: valorParcela,
-        tipo: tipo || 'SAIDA',
-        categoria: categoria || 'OUTROS',
+        tipo, categoria, banco, tipoConta, formaPagamento,
         status: 'PENDENTE',
-        data: dataVencimento,
-        banco: banco || 'ITAU',
-        tipoConta: tipoConta || 'PJ',
-        formaPagamento: formaPagamento || 'PIX',
+        data: vcto,
         parcelaAtual: i + 1,
         totalParcelas: numParcelas
       });
     }
 
-    // Criando todas de uma vez no banco
-    const criados = await prisma.lancamento.createMany({
-      data: listaParcelas
-    });
-
-    console.log(`>>> [POST] ${numParcelas} parcelas criadas com sucesso.`);
-    return NextResponse.json(criados);
+    await prisma.lancamento.createMany({ data: listaParcelas });
+    return NextResponse.json({ message: "Parcelas criadas" });
 
   } catch (error) {
-    console.error(">>> [POST] Erro ao salvar:", error.message);
-    return NextResponse.json({ error: 'Erro ao processar lançamento' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
