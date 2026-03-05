@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Trash2, Loader2, Wallet, X, Search, 
   Landmark, ChevronDown, Layers, Tag, CreditCard, 
-  ArrowUpCircle, ArrowDownCircle, Banknote, CalendarDays, AlignLeft
+  ArrowUpCircle, ArrowDownCircle, Banknote, CalendarDays, AlignLeft,
+  User, Building2
 } from 'lucide-react';
 
 export default function Lancamentos() {
@@ -127,23 +128,8 @@ export default function Lancamentos() {
     <div className="relative space-y-6 animate-in fade-in pb-10 p-4 md:p-8 bg-slate-50 min-h-screen">
       
       {notificacao.visivel && (
-        <div className={`fixed top-5 right-5 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${notificacao.tipo === 'sucesso' ? 'bg-slate-900 border-emerald-500/50 text-white' : 'bg-rose-900 border-rose-50 text-white font-bold'}`}>
+        <div className={`fixed top-5 right-5 z-[120] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${notificacao.tipo === 'sucesso' ? 'bg-slate-900 border-emerald-500/50 text-white' : 'bg-rose-900 border-rose-50 text-white font-bold'}`}>
           {notificacao.mensagem}
-        </div>
-      )}
-
-      {/* MODAL CONFIRMAÇÃO */}
-      {modalConfirmacao.aberto && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
-            <Trash2 size={32} className="mx-auto text-rose-500 mb-4" />
-            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Excluir Registro?</h3>
-            <p className="text-slate-500 text-[10px] font-bold mb-6 tracking-wide uppercase">Isso removerá o grupo completo de parcelas.</p>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setModalConfirmacao({ aberto: false, id: null, descricao: '' })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase">Voltar</button>
-              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest">Excluir</button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -153,7 +139,7 @@ export default function Lancamentos() {
           <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl text-blue-600"><Wallet size={32} /></div>
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">Pillar Finance</h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Controle de Fluxo Operacional</p>
+            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Gestão de Fluxo Operacional</p>
           </div>
         </div>
         <div className="flex gap-3 w-full lg:w-auto">
@@ -172,8 +158,9 @@ export default function Lancamentos() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <th className="p-6 text-center">Data</th>
-                <th className="p-6">Descrição / Informações</th>
-                <th className="p-6 text-center">Status / Progresso</th>
+                <th className="p-6">Descrição / Info</th>
+                <th className="p-6 text-center">Composição</th>
+                <th className="p-6 text-center">Status</th>
                 <th className="p-8 text-right">Valor Parcela</th>
                 <th className="p-6 text-center">Ações</th>
               </tr>
@@ -192,31 +179,33 @@ export default function Lancamentos() {
 
                 const pagas = parcelasDoGrupo.filter(t => t.status === 'PAGO').length;
                 const isEntrada = item.tipo === 'ENTRADA';
-                const corFundo = isEntrada ? 'bg-emerald-50/40 hover:bg-emerald-50/80' : 'bg-rose-50/40 hover:bg-rose-50/80';
+                const corFundo = isEntrada ? 'bg-emerald-50/30' : 'bg-rose-50/30';
 
                 return (
                   <React.Fragment key={item.id}>
-                    <tr className={`transition-all ${corFundo}`}>
+                    <tr className={`transition-all hover:bg-white ${corFundo}`}>
                       <td className="p-6 text-center">
                         <span className="text-xs text-slate-600 font-black">{formatarDataExibicao(item.data)}</span>
                       </td>
                       <td className="p-6">
                         <div className="flex items-center gap-3">
                           {item.totalParcelas > 1 && (
-                            <button onClick={() => setGruposAbertos(p => ({...p, [grupoKey]: !estaAberto}))} className={`p-1.5 rounded-lg transition-all ${estaAberto ? 'bg-blue-600 text-white rotate-180 shadow-md' : 'bg-white/70 text-slate-400'}`}>
+                            <button onClick={() => setGruposAbertos(p => ({...p, [grupoKey]: !estaAberto}))} className={`p-1.5 rounded-lg transition-all ${estaAberto ? 'bg-blue-600 text-white rotate-180' : 'bg-white/70 text-slate-400'}`}>
                               <ChevronDown size={14} />
                             </button>
                           )}
                           <div className="flex flex-col">
-                            <span className="font-black text-slate-800 text-sm uppercase tracking-tight">
-                              {baseName}
-                              {item.totalParcelas > 1 && <span className="ml-2 text-[9px] bg-white/80 px-2 py-0.5 rounded text-blue-600 font-black border border-blue-100">{item.totalParcelas}X</span>}
-                            </span>
+                            <span className="font-black text-slate-800 text-sm uppercase tracking-tight">{baseName}</span>
                             <span className="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-0.5">
-                              <Landmark size={10} className="text-blue-500"/> {item.banco} | <Tag size={10} className="text-slate-400"/> {item.categoria} | <CreditCard size={10} className="text-slate-400"/> {item.formaPagamento}
+                              <Landmark size={10} className="text-blue-500"/> {item.banco} | <Tag size={10}/> {item.categoria}
                             </span>
                           </div>
                         </div>
+                      </td>
+                      <td className="p-6 text-center">
+                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${item.tipoConta === 'PJ' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                           {item.tipoConta === 'PJ' ? 'PJ' : 'PF'}
+                         </span>
                       </td>
                       <td className="p-6 text-center">
                         {item.totalParcelas > 1 ? (
@@ -224,7 +213,7 @@ export default function Lancamentos() {
                             <Layers size={10} /> {pagas}/{item.totalParcelas} PAGAS
                           </div>
                         ) : (
-                          <button disabled={processandoId === item.id} onClick={() => handleAlternarStatus(item)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-sm transition-all border ${
+                          <button disabled={processandoId === item.id} onClick={() => handleAlternarStatus(item)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all border ${
                             item.status === 'PAGO' ? 'bg-emerald-600 text-white border-emerald-500' : 
                             item.status === 'EM ABERTO' ? 'bg-blue-600 text-white border-blue-500' : 'bg-orange-500 text-white border-orange-400'
                           }`}>
@@ -236,24 +225,23 @@ export default function Lancamentos() {
                         {isEntrada ? '+ ' : '- '}{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </td>
                       <td className="p-6 text-center">
-                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id, descricao: item.descricao })} className="p-2.5 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all shadow-sm"><Trash2 size={18} /></button>
+                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id, descricao: item.descricao })} className="p-2.5 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-rose-600 transition-all"><Trash2 size={18} /></button>
                       </td>
                     </tr>
 
                     {estaAberto && parcelasDoGrupo.map((parc) => (
-                      <tr key={parc.id} className={`animate-in slide-in-from-top-1 duration-200 border-l-4 ${isEntrada ? 'bg-emerald-50/20 border-emerald-500' : 'bg-rose-50/20 border-rose-500'}`}>
+                      <tr key={parc.id} className={`animate-in slide-in-from-top-1 border-l-4 ${isEntrada ? 'bg-emerald-50/10 border-emerald-500' : 'bg-rose-50/10 border-rose-500'}`}>
                         <td className="p-4 text-center text-[10px] text-slate-400 font-bold italic">{formatarDataExibicao(parc.data)}</td>
                         <td className="p-4 pl-16">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-600 text-[11px] uppercase">{parc.descricao}</span>
-                              <span className="text-[7px] font-black text-slate-400 uppercase opacity-60">{parc.formaPagamento}</span>
-                            </div>
+                            <span className="font-bold text-slate-600 text-[11px] uppercase">{parc.descricao}</span>
                         </td>
                         <td className="p-4 text-center">
-                            <button disabled={processandoId === parc.id} onClick={() => handleAlternarStatus(parc)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase shadow-sm ${
-                              parc.status === 'PAGO' ? 'bg-emerald-600 text-white' : 
-                              parc.status === 'EM ABERTO' ? 'bg-blue-500 text-white' : 'bg-orange-500 text-white'
-                            }`}>{processandoId === parc.id ? <Loader2 className="animate-spin" size={10} /> : parc.status}</button>
+                           <span className="text-[9px] font-black text-slate-300">{parc.tipoConta}</span>
+                        </td>
+                        <td className="p-4 text-center">
+                            <button disabled={processandoId === parc.id} onClick={() => handleAlternarStatus(parc)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase ${
+                              parc.status === 'PAGO' ? 'bg-emerald-600 text-white' : 'bg-blue-500 text-white'
+                            }`}>{parc.status}</button>
                         </td>
                         <td className={`p-4 text-right font-bold text-xs ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -269,10 +257,10 @@ export default function Lancamentos() {
         </div>
       </div>
 
-      {/* MODAL NOVO REGISTRO - LAYOUT ATUALIZADO */}
+      {/* MODAL NOVO REGISTRO */}
       {modalAberto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-8 bg-slate-50 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-600 rounded-xl text-white"><Plus size={20}/></div>
@@ -281,72 +269,76 @@ export default function Lancamentos() {
               <button onClick={() => setModalAberto(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleSalvar} className="p-8 space-y-6 overflow-y-auto">
-              {/* SEÇÃO: O QUE É? */}
+            <form onSubmit={handleSalvar} className="p-8 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><AlignLeft size={12}/> Descrição do Título</label>
-                  <input type="text" required value={novoItem.descricao} onChange={e => setNovoItem({...novoItem, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-all" placeholder="Ex: Mensalidade Internet Pillar IT" />
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><AlignLeft size={12}/> Descrição</label>
+                  <input type="text" required value={novoItem.descricao} onChange={e => setNovoItem({...novoItem, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-all" placeholder="Ex: NF de Serviço Pillar IT" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><CalendarDays size={12}/> Data Vencimento</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><CalendarDays size={12}/> Vencimento</label>
                   <input type="date" required value={novoItem.data} onChange={e => setNovoItem({...novoItem, data: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Banknote size={12}/> Valor Total</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Banknote size={12}/> Valor</label>
                   <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" placeholder="0.00" />
                 </div>
               </div>
 
-              {/* SEÇÃO: COMO PAGA? */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
-                <div>
-                  <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><Landmark size={12}/> Banco de Saída/Entrada</label>
-                  <select value={novoItem.banco} onChange={e => setNovoItem({...novoItem, banco: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none cursor-pointer focus:border-blue-600">
-                    {bancos.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
+              {/* CARDS DE CONFIGURAÇÃO FINANCEIRA */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><Landmark size={12}/> Banco Origem</label>
+                    <select value={novoItem.banco} onChange={e => setNovoItem({...novoItem, banco: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                      {bancos.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Tag size={12}/> Categoria</label>
+                    <select value={novoItem.categoria} onChange={e => setNovoItem({...novoItem, categoria: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                      {categoriasGerais.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><CreditCard size={12}/> Forma de Pagamento</label>
-                  <select value={novoItem.formaPagamento} onChange={e => setNovoItem({...novoItem, formaPagamento: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none cursor-pointer focus:border-blue-600">
-                    {formasPagamento.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Tag size={12}/> Categoria</label>
-                  <select value={novoItem.categoria} onChange={e => setNovoItem({...novoItem, categoria: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
-                    {categoriasGerais.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Layers size={12}/> Parcelamento</label>
-                  <select value={novoItem.parcelas} onChange={e => setNovoItem({...novoItem, parcelas: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-blue-700 text-sm outline-none">
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
-                  </select>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><CreditCard size={12}/> Forma Pagamento</label>
+                    <select value={novoItem.formaPagamento} onChange={e => setNovoItem({...novoItem, formaPagamento: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                      {formasPagamento.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1">Composição (PF/PJ)</label>
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-200">
+                      <button 
+                        type="button"
+                        onClick={() => setNovoItem({...novoItem, tipoConta: 'PF'})}
+                        className={`flex-1 py-2 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${novoItem.tipoConta === 'PF' ? 'bg-orange-500 text-white' : 'text-slate-400'}`}
+                      >
+                        <User size={12}/> PESSOA FÍSICA
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setNovoItem({...novoItem, tipoConta: 'PJ'})}
+                        className={`flex-1 py-2 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${novoItem.tipoConta === 'PJ' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                      >
+                        <Building2 size={12}/> PESSOA JURÍDICA
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* SEÇÃO: FLUXO */}
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between pt-2">
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                 <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
-                  <button 
-                    type="button"
-                    onClick={() => setNovoItem({...novoItem, tipo: 'ENTRADA'})}
-                    className={`flex-1 md:px-6 py-2.5 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}
-                  >
-                    <div className="flex items-center justify-center gap-2"><ArrowUpCircle size={14}/> RECEITA</div>
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setNovoItem({...novoItem, tipo: 'SAIDA'})}
-                    className={`flex-1 md:px-6 py-2.5 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'SAIDA' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500'}`}
-                  >
-                    <div className="flex items-center justify-center gap-2"><ArrowDownCircle size={14}/> DESPESA</div>
-                  </button>
+                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'ENTRADA'})} className={`flex-1 md:px-8 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>RECEITA</button>
+                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'SAIDA'})} className={`flex-1 md:px-8 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'SAIDA' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500'}`}>DESPESA</button>
                 </div>
 
-                <button type="submit" disabled={isSalvando} className="w-full md:w-auto bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 flex items-center justify-center gap-3">
-                  {isSalvando ? <Loader2 className="animate-spin" size={18} /> : <>Efetivar Lançamento <Plus size={16}/></>}
+                <button type="submit" disabled={isSalvando} className="w-full md:w-auto bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50">
+                  {isSalvando ? <Loader2 className="animate-spin" size={18} /> : "Finalizar Registro"}
                 </button>
               </div>
             </form>
