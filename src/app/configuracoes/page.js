@@ -382,10 +382,25 @@ function TabAdminUsuarios({ notify }) {
 }
 
 function TabSistemaSMTP() {
-  const logs = [
-    { id: 1, data: 'Hoje 14:30', evento: 'ENVIO DE RELATÓRIO MENSAL', status: 'OK' },
-    { id: 2, data: 'Ontem 09:15', evento: 'FALHA DISPARO SMTP', status: 'ERRO' },
-  ];
+  const [dados, setDados] = useState({ smtp: {}, logs: [] });
+  const [loading, setLoading] = useState(true);
+
+  const fetchSistema = async () => {
+    try {
+      setLoading(false);
+      const res = await fetch('/api/admin/sistema');
+      const data = await res.json();
+      setDados(data);
+    } catch (e) {
+      console.error("Erro ao carregar sistema");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchSistema(); }, []);
+
+  if (loading) return <div className="p-10 text-center uppercase font-black text-[10px] animate-pulse">Sincronizando Núcleo...</div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
@@ -393,13 +408,13 @@ function TabSistemaSMTP() {
         <div className="z-10">
            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-8 flex items-center gap-2 italic"><Server size={14} /> Núcleo SMTP</h3>
            <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10 w-fit">
-             <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Servidor de Disparo</p>
-             <div className="font-black text-emerald-400 flex items-center gap-2 text-sm md:text-base">
+             <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Status do Host: {dados.smtp.host}</p>
+             <div className={`font-black flex items-center gap-2 text-sm md:text-base ${dados.smtp.online ? 'text-emerald-400' : 'text-rose-400'}`}>
                <div className="relative flex h-2.5 w-2.5">
-                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
+                 {dados.smtp.online && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dados.smtp.online ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500'}`}></span>
                </div>
-               CONECTADO / ONLINE
+               {dados.smtp.online ? 'CONECTADO / ONLINE' : 'DESCONECTADO / ERRO'}
              </div>
            </div>
         </div>
@@ -409,15 +424,17 @@ function TabSistemaSMTP() {
       </div>
 
       <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 italic">Monitoramento de Disparos</h3>
-        <div className="bg-slate-50 rounded-[2rem] p-6 font-mono text-[10px] space-y-4 border border-slate-100">
-          {logs.map(log => (
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 italic">Logs de Eventos Reais</h3>
+        <div className="bg-slate-50 rounded-[2rem] p-6 font-mono text-[10px] space-y-4 border border-slate-100 overflow-y-auto max-h-[300px]">
+          {dados.logs.length > 0 ? dados.logs.map(log => (
             <div key={log.id} className="flex flex-wrap gap-4 border-b border-slate-200/50 pb-4 last:border-0 last:pb-0 items-center">
-              <span className="text-slate-400 font-bold">{log.data}</span>
+              <span className="text-slate-400 font-bold">{new Date(log.data).toLocaleString('pt-BR')}</span>
               <span className={log.status === 'OK' ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>[{log.status}]</span>
               <span className="text-slate-700 font-bold flex-1 uppercase tracking-tight">{log.evento}</span>
             </div>
-          ))}
+          )) : (
+            <div className="text-slate-400 italic">Nenhum evento registrado ainda.</div>
+          )}
         </div>
       </div>
     </div>
