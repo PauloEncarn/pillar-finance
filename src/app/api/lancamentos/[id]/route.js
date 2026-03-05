@@ -9,95 +9,64 @@ export async function PATCH(request, { params }) {
     const body = await request.json();
     const itemOriginal = await prisma.lancamento.findUnique({ where: { id } });
 
-    if (!itemOriginal) {
-      return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 });
-    }
+    if (!itemOriginal) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
-    // 1. LÓGICA DE ALTERNÂNCIA DE STATUS RÁPIDA (Botão da Tabela)
-    // Se vier apenas o status no body, atualizamos apenas ele.
-    if (Object.keys(body).length === 1 && body.status) {
-      const dataUpdate = { status: body.status };
-      
-      // Se estornar para PENDENTE, limpamos os dados bancários por segurança
-      if (body.status === 'PENDENTE') {
-        dataUpdate.banco = 'AGUARDANDO';
-        dataUpdate.formaPagamento = 'A DEFINIR';
-      }
-
-      const atualizado = await prisma.lancamento.update({
-        where: { id },
-        data: dataUpdate
-      });
-      return NextResponse.json(atualizado);
-    }
-
-    // 2. LÓGICA DE LIQUIDAÇÃO / FINANCIAMENTO (Modal de Baixa)
-    if (body.dataPagamento) {
+    // --- LÓGICA 1: REGERAÇÃO DE FLUXO (EDIÇÃO MASTER) ---
+    // Se mudar parcelas ou valor bruto em um item que faz parte de um grupo
+    if (body.regerarFluxo) {
+      const baseName = itemOriginal.descricao.split(' (')[0];
       const numParcelas = parseInt(body.parcelas) || 1;
-      const dataBase = new Date(body.dataPagamento);
+      const valorParcela = parseFloat(body.valor) / numParcelas;
+      const dataInicial = new Date(body.data);
 
-      // Gerar parcelas se for um título único virando financiamento
-      if (numParcelas > 1 && itemOriginal.totalParcelas <= 1) {
-        const valorParcela = Number(itemOriginal.valor) / numParcelas;
-        const novasParcelas = [];
+      const novasParcelas = [];
+      for (let i = 0; i < numParcelas; i++) {
+        const vcto = new Date(dataInicial);
+        vcto.setMonth(dataInicial.getMonth() + i);
 
-        for (let i = 0; i < numParcelas; i++) {
-          const vcto = new Date(dataBase);
-          vcto.setMonth(dataBase.getMonth() + i);
-
-          novasParcelas.push({
-            descricao: `${itemOriginal.descricao} (${i + 1}/${numParcelas})`,
-            valor: valorParcela,
-            tipo: itemOriginal.tipo,
-            categoria: itemOriginal.categoria,
-            tipoConta: itemOriginal.tipoConta,
-            status: i === 0 ? 'PAGO' : 'PENDENTE',
-            data: vcto,
-            banco: body.banco || 'ITAU',
-            formaPagamento: body.formaPagamento || 'PIX',
-            parcelaAtual: i + 1,
-            totalParcelas: numParcelas
-          });
-        }
-
-        await prisma.$transaction([
-          prisma.lancamento.delete({ where: { id } }),
-          prisma.lancamento.createMany({ data: novasParcelas })
-        ]);
-
-        return NextResponse.json({ message: 'Financiamento processado' });
+        novasParcelas.push({
+          descricao: numParcelas > 1 ? `${body.descricao} (${i + 1}/${numParcelas})` : body.descricao,
+          valor: valorParcela,
+          tipo: body.tipo,
+          categoria: body.categoria,
+          banco: body.banco,
+          tipoConta: body.tipoConta,
+          formaPagamento: body.formaPagamento,
+          status: 'PENDENTE',
+          data: vcto,
+          parcelaAtual: i + 1,
+          totalParcelas: numParcelas
+        });
       }
 
-      // Baixa simples
-      const liquidado = await prisma.lancamento.update({
-        where: { id },
-        data: {
-          status: 'PAGO',
-          banco: body.banco || itemOriginal.banco,
-          formaPagamento: body.formaPagamento || itemOriginal.formaPagamento,
-          data: dataBase
-        }
-      });
-      return NextResponse.json(liquidado);
+      // Transação: Apaga todo o grupo antigo e cria o novo fluxo corrigido
+      await prisma.$transaction([
+        prisma.lancamento.deleteMany({
+          where: { descricao: { startsWith: baseName }, tipoConta: itemOriginal.tipoConta }
+        }),
+        prisma.lancamento.createMany({ data: novasParcelas })
+      ]);
+
+      return NextResponse.json({ message: 'Fluxo regerado com sucesso' });
     }
 
-    // 3. LÓGICA DE EDIÇÃO GERAL (Modal de Edição)
-    const editado = await prisma.lancamento.update({
+    // --- LÓGICA 2: AJUSTE FINO (APENAS UM ITEM) ---
+    const atualizado = await prisma.lancamento.update({
       where: { id },
       data: {
         descricao: body.descricao ?? itemOriginal.descricao,
         valor: body.valor ? parseFloat(body.valor) : itemOriginal.valor,
-        categoria: body.categoria ?? itemOriginal.categoria,
-        tipoConta: body.tipoConta ?? itemOriginal.tipoConta,
-        tipo: body.tipo ?? itemOriginal.tipo,
-        data: body.data ? new Date(body.data) : itemOriginal.data
+        status: body.status ?? itemOriginal.status,
+        data: body.data ? new Date(body.data) : itemOriginal.data,
+        banco: body.banco ?? itemOriginal.banco,
+        formaPagamento: body.formaPagamento ?? itemOriginal.formaPagamento,
+        categoria: body.categoria ?? itemOriginal.categoria
       }
     });
 
-    return NextResponse.json(editado);
+    return NextResponse.json(atualizado);
 
   } catch (error) {
-    console.error(">>> [PATCH] ERRO:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
