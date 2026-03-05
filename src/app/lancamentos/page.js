@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Loader2, Wallet, X, Search, 
   Landmark, ChevronDown, Layers, Tag, CreditCard, 
   ArrowUpCircle, ArrowDownCircle, Banknote, CalendarDays, AlignLeft,
-  User, Building2
+  User, Building2, Hash
 } from 'lucide-react';
 
 export default function Lancamentos() {
@@ -139,7 +139,7 @@ export default function Lancamentos() {
           <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl text-blue-600"><Wallet size={32} /></div>
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">Pillar Finance</h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Gestão de Fluxo Operacional</p>
+            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Controle de Fluxo Operacional</p>
           </div>
         </div>
         <div className="flex gap-3 w-full lg:w-auto">
@@ -195,7 +195,10 @@ export default function Lancamentos() {
                             </button>
                           )}
                           <div className="flex flex-col">
-                            <span className="font-black text-slate-800 text-sm uppercase tracking-tight">{baseName}</span>
+                            <span className="font-black text-slate-800 text-sm uppercase tracking-tight">
+                              {baseName}
+                              {item.totalParcelas > 1 && <span className="ml-2 text-[9px] bg-white/80 px-2 py-0.5 rounded text-blue-600 font-black border border-blue-100">{item.totalParcelas}X</span>}
+                            </span>
                             <span className="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-0.5">
                               <Landmark size={10} className="text-blue-500"/> {item.banco} | <Tag size={10}/> {item.categoria}
                             </span>
@@ -225,7 +228,7 @@ export default function Lancamentos() {
                         {isEntrada ? '+ ' : '- '}{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </td>
                       <td className="p-6 text-center">
-                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id, descricao: item.descricao })} className="p-2.5 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-rose-600 transition-all"><Trash2 size={18} /></button>
+                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id, descricao: item.descricao })} className="p-2.5 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-rose-600 transition-all shadow-sm"><Trash2 size={18} /></button>
                       </td>
                     </tr>
 
@@ -280,7 +283,7 @@ export default function Lancamentos() {
                   <input type="date" required value={novoItem.data} onChange={e => setNovoItem({...novoItem, data: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Banknote size={12}/> Valor</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Banknote size={12}/> Valor Total</label>
                   <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" placeholder="0.00" />
                 </div>
               </div>
@@ -310,35 +313,47 @@ export default function Lancamentos() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1">Composição (PF/PJ)</label>
-                    <div className="flex bg-white p-1 rounded-xl border border-slate-200">
+                    <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><Hash size={12}/> Número de Parcelas</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="360"
+                      value={novoItem.parcelas} 
+                      onChange={e => setNovoItem({...novoItem, parcelas: e.target.value})} 
+                      className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-blue-600 text-sm outline-none focus:ring-1 focus:ring-blue-600" 
+                    />
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 pt-2">
+                    <label className="text-[10px] font-black text-blue-600 uppercase mb-2 block tracking-widest ml-1">Composição da Conta</label>
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                       <button 
                         type="button"
                         onClick={() => setNovoItem({...novoItem, tipoConta: 'PF'})}
-                        className={`flex-1 py-2 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${novoItem.tipoConta === 'PF' ? 'bg-orange-500 text-white' : 'text-slate-400'}`}
+                        className={`flex-1 py-3 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${novoItem.tipoConta === 'PF' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
                       >
-                        <User size={12}/> PESSOA FÍSICA
+                        <User size={14}/> PESSOA FÍSICA
                       </button>
                       <button 
                         type="button"
                         onClick={() => setNovoItem({...novoItem, tipoConta: 'PJ'})}
-                        className={`flex-1 py-2 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${novoItem.tipoConta === 'PJ' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                        className={`flex-1 py-3 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${novoItem.tipoConta === 'PJ' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
                       >
-                        <Building2 size={12}/> PESSOA JURÍDICA
+                        <Building2 size={14}/> PESSOA JURÍDICA
                       </button>
                     </div>
-                  </div>
                 </div>
               </div>
 
               <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
-                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'ENTRADA'})} className={`flex-1 md:px-8 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>RECEITA</button>
-                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'SAIDA'})} className={`flex-1 md:px-8 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'SAIDA' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500'}`}>DESPESA</button>
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto border border-slate-200">
+                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'ENTRADA'})} className={`flex-1 md:px-8 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>RECEITA (+)</button>
+                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'SAIDA'})} className={`flex-1 md:px-8 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'SAIDA' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500'}`}>DESPESA (-)</button>
                 </div>
 
-                <button type="submit" disabled={isSalvando} className="w-full md:w-auto bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50">
-                  {isSalvando ? <Loader2 className="animate-spin" size={18} /> : "Finalizar Registro"}
+                <button type="submit" disabled={isSalvando} className="w-full md:w-auto bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                  {isSalvando ? <Loader2 className="animate-spin" size={18} /> : "Processar Registro"}
                 </button>
               </div>
             </form>
