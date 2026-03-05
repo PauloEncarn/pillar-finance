@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Plus, Trash2, Loader2, Wallet, X, Search, Edit3,
-  Landmark, Tag, CheckCircle2, DollarSign,
-  User, Building2, ArrowUpRight, ArrowDownLeft, AlertTriangle, Calendar,
-  CreditCard, ChevronDown, Layers, ChevronLeft, ChevronRight, RotateCcw, Check
+  Plus, Trash2, Loader2, Wallet, X, Search, 
+  Landmark, ChevronDown, Layers, Tag, CreditCard, 
+  ArrowUpCircle, ArrowDownCircle, Banknote, CalendarDays, AlignLeft
 } from 'lucide-react';
 
 export default function Lancamentos() {
@@ -16,25 +15,20 @@ export default function Lancamentos() {
   
   const [busca, setBusca] = useState('');
   const [paginaAtual, setPaginaAtual] = useState(1);
-  const itensPorPagina = 8;
+  const itensPorPagina = 10;
 
   const [gruposAbertos, setGruposAbertos] = useState({});
   const [modalAberto, setModalAberto] = useState(false);
-  const [modoEdicao, setModoEdicao] = useState(false);
-  const [modalExcluir, setModalExcluir] = useState({ aberto: false, id: null });
-  
-  const [modalPagamento, setModalPagamento] = useState({ 
-    aberto: false, item: null, parcelas: '1', banco: 'ITAU', forma: 'PIX', data: new Date().toISOString().split('T')[0]
-  });
-
+  const [modalConfirmacao, setModalConfirmacao] = useState({ aberto: false, id: null, descricao: '' });
   const [notificacao, setNotificacao] = useState({ visivel: false, mensagem: '', tipo: 'sucesso' });
 
-  const bancos = ["CAIXA", "ITAU", "BRADESCO", "SANTANDER"];
+  const bancos = ["CAIXA", "ITAU", "BRADESCO", "SANTANDER", "NUBANK", "INTER"];
   const categoriasGerais = ["COMBUSTIVEL", "MANUTENCAO", "PECAS", "SALARIOS", "ALIMENTACAO", "ALUGUEL", "IMPOSTOS", "SERVICOS", "VENDAS", "OUTROS"];
-  const formasPagamento = ["PIX", "BOLETO", "TED", "CARTAO DEBITO", "CREDITO", "DINHEIRO", "TRANSFERENCIA", "FINANCIAMENTO"];
+  const formasPagamento = ["PIX", "BOLETO", "TED", "CARTAO DEBITO", "CREDITO", "DINHEIRO"];
 
   const [novoItem, setNovoItem] = useState({
-    descricao: '', valor: '', tipo: 'SAIDA', categoria: 'OUTROS', tipoConta: 'PJ'
+    descricao: '', valor: '', tipo: 'SAIDA', categoria: 'COMBUSTIVEL', status: 'PENDENTE', data: '',
+    banco: 'ITAU', tipoConta: 'PJ', formaPagamento: 'PIX', parcelas: '1'
   });
 
   const carregarDados = async () => {
@@ -42,298 +36,320 @@ export default function Lancamentos() {
       setIsLoading(true);
       const res = await fetch(`/api/lancamentos?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      setTransacoes(Array.isArray(data) ? data : []);
-    } catch (error) { exibirNotificacao("Erro de conexão", "erro"); }
-    finally { setIsLoading(false); }
+      if (Array.isArray(data)) setTransacoes(data);
+    } catch (error) { 
+      exibirNotificacao("Erro de conexão", "erro"); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
-  useEffect(() => { carregarDados(); }, []);
+  useEffect(() => {
+    const hoje = new Date().toISOString().split('T')[0];
+    setNovoItem(prev => ({ ...prev, data: hoje }));
+    carregarDados();
+  }, []);
+
+  const formatarDataExibicao = (dataString) => {
+    if (!dataString) return "";
+    const [ano, mes, dia] = dataString.split('T')[0].split('-');
+    return `${dia}/${mes}/${ano}`;
+  };
 
   const exibirNotificacao = (msg, tipo = 'sucesso') => {
     setNotificacao({ visivel: true, mensagem: msg, tipo });
     setTimeout(() => setNotificacao({ visivel: false, mensagem: '', tipo: 'sucesso' }), 3000);
   };
 
-  // --- LÓGICA DE FILTRO E PAGINAÇÃO ---
-  const transacoesFiltradas = useMemo(() => transacoes.filter(t => t.descricao?.toLowerCase().includes(busca.toLowerCase())), [transacoes, busca]);
-  const itensPrincipais = useMemo(() => transacoesFiltradas.filter(t => t.parcelaAtual === 1 || t.totalParcelas <= 1), [transacoesFiltradas]);
-  const totalPaginas = Math.ceil(itensPrincipais.length / itensPorPagina);
-  const itensDaPagina = useMemo(() => itensPrincipais.slice((paginaAtual - 1) * itensPorPagina, paginaAtual * itensPorPagina), [itensPrincipais, paginaAtual]);
+  const transacoesFiltradas = useMemo(() => {
+    return transacoes.filter(t => t.descricao?.toLowerCase().includes(busca.toLowerCase()));
+  }, [transacoes, busca]);
 
-  // --- HANDLERS ---
-  const handleUpdateStatus = async (id, novoStatus) => {
-    setProcessandoId(id);
-    try {
-      const res = await fetch(`/api/lancamentos/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: novoStatus })
-      });
-      if (res.ok) {
-        await carregarDados();
-        exibirNotificacao(novoStatus === 'PAGO' ? "Pago!" : "Estornado!");
-      }
-    } catch (error) { exibirNotificacao("Erro ao atualizar", "erro"); }
-    finally { setProcessandoId(null); }
-  };
+  const itensPrincipais = useMemo(() => {
+    return transacoesFiltradas.filter(t => t.parcelaAtual === 1 || t.totalParcelas <= 1);
+  }, [transacoesFiltradas]);
+
+  const itensDaPagina = useMemo(() => {
+    const inicio = (paginaAtual - 1) * itensPorPagina;
+    return itensPrincipais.slice(inicio, inicio + itensPorPagina);
+  }, [itensPrincipais, paginaAtual]);
 
   const handleSalvar = async (e) => {
     e.preventDefault();
     setIsSalvando(true);
-    const url = modoEdicao ? `/api/lancamentos/${novoItem.id}` : '/api/lancamentos';
-    const method = modoEdicao ? 'PATCH' : 'POST';
     try {
-      const payload = { ...novoItem, data: new Date().toISOString() };
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (res.ok) { await carregarDados(); fecharModal(); exibirNotificacao("Sucesso!"); }
+      const res = await fetch('/api/lancamentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(novoItem)
+      });
+      if (res.ok) {
+        await carregarDados();
+        setModalAberto(false);
+        setNovoItem(prev => ({ ...prev, descricao: '', valor: '', parcelas: '1' }));
+        exibirNotificacao("Lançamento criado!");
+      }
     } catch (error) { exibirNotificacao("Erro ao salvar", "erro"); }
     finally { setIsSalvando(false); }
   };
 
-  const handleEfetivarBaixa = async (e) => {
-    e.preventDefault();
-    setProcessandoId(modalPagamento.item.id);
+  const handleAlternarStatus = async (item) => {
+    const statusCycle = { 'PENDENTE': 'PAGO', 'PAGO': 'EM ABERTO', 'EM ABERTO': 'PENDENTE' };
+    const novoStatus = statusCycle[item.status] || 'PENDENTE';
+    setProcessandoId(item.id);
     try {
-      const res = await fetch(`/api/lancamentos/${modalPagamento.item.id}`, {
+      await fetch(`/api/lancamentos/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          banco: modalPagamento.banco,
-          formaPagamento: modalPagamento.forma,
-          parcelas: modalPagamento.parcelas,
-          dataPagamento: modalPagamento.data
-        })
+        body: JSON.stringify({ status: novoStatus })
       });
-      if (res.ok) { await carregarDados(); setModalPagamento({ ...modalPagamento, aberto: false }); exibirNotificacao("Baixa efetuada!"); }
-    } catch (error) { exibirNotificacao("Erro na baixa", "erro"); }
+      setTransacoes(prev => prev.map(t => t.id === item.id ? { ...t, status: novoStatus } : t));
+    } catch (error) { exibirNotificacao("Erro ao atualizar", "erro"); }
     finally { setProcessandoId(null); }
   };
 
-  const abrirEdicao = (item) => { setNovoItem({ ...item, valor: item.valor.toString() }); setModoEdicao(true); setModalAberto(true); };
-  const fecharModal = () => { setModalAberto(false); setModoEdicao(false); setNovoItem({ descricao: '', valor: '', tipo: 'SAIDA', categoria: 'OUTROS', tipoConta: 'PJ' }); };
+  const confirmarExclusao = async () => {
+    const id = modalConfirmacao.id;
+    const baseName = modalConfirmacao.descricao.split(' (')[0];
+    setModalConfirmacao({ aberto: false, id: null, descricao: '' });
+    setProcessandoId(id);
+    try {
+      const res = await fetch(`/api/lancamentos/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setTransacoes(prev => prev.filter(item => !item.descricao.startsWith(baseName)));
+        exibirNotificacao("Lançamento removido!");
+      }
+    } catch (error) { exibirNotificacao("Erro ao excluir", "erro"); }
+    finally { setProcessandoId(null); }
+  };
 
   return (
-    <div className="relative space-y-6 max-w-[1600px] mx-auto p-4 pb-20 font-sans tracking-tight">
+    <div className="relative space-y-6 animate-in fade-in pb-10 p-4 md:p-8 bg-slate-50 min-h-screen">
       
       {notificacao.visivel && (
-        <div className={`fixed top-5 right-5 z-[120] px-6 py-4 rounded-2xl shadow-2xl border font-black uppercase text-[10px] tracking-widest ${notificacao.tipo === 'sucesso' ? 'bg-slate-900 border-emerald-500 text-white' : 'bg-rose-900 text-white'}`}>
+        <div className={`fixed top-5 right-5 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${notificacao.tipo === 'sucesso' ? 'bg-slate-900 border-emerald-500/50 text-white' : 'bg-rose-900 border-rose-50 text-white font-bold'}`}>
           {notificacao.mensagem}
         </div>
       )}
 
+      {/* MODAL CONFIRMAÇÃO */}
+      {modalConfirmacao.aberto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
+            <Trash2 size={32} className="mx-auto text-rose-500 mb-4" />
+            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Excluir Registro?</h3>
+            <p className="text-slate-500 text-[10px] font-bold mb-6 tracking-wide uppercase">Isso removerá o grupo completo de parcelas.</p>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setModalConfirmacao({ aberto: false, id: null, descricao: '' })} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase">Voltar</button>
+              <button onClick={confirmarExclusao} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest">Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
-      <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="flex items-center gap-4">
           <div className="p-4 bg-white border border-slate-100 shadow-sm rounded-3xl text-blue-600"><Wallet size={32} /></div>
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">Pillar Finance</h1>
-            <p className="text-slate-400 text-[10px] font-black uppercase mt-1 tracking-widest">Gestão Operacional</p>
+            <p className="text-slate-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Controle de Fluxo Operacional</p>
           </div>
         </div>
-        <div className="flex gap-3 w-full lg:w-auto items-center">
-          <div className="relative flex-1 lg:w-80 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-            <input type="text" placeholder="Pesquisar..." value={busca} onChange={(e) => {setBusca(e.target.value); setPaginaAtual(1);}} className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none shadow-sm" />
+        <div className="flex gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-64">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input type="text" placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600 shadow-sm" />
           </div>
-          <button onClick={() => setModalAberto(true)} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl"><Plus size={18} /> Novo</button>
+          <button onClick={() => setModalAberto(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-100/50"><Plus size={16} /> Novo Registro</button>
         </div>
       </div>
 
-      {/* TABELA AGRUPADA */}
+      {/* TABELA */}
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <tr>
-              <th className="p-8">Descrição / Cabeçalho</th>
-              <th className="p-8 text-center">Tipo</th>
-              <th className="p-8 text-center">Ações de Gestão</th>
-              <th className="p-8 text-right">Valor</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {itensDaPagina.map((item) => {
-              const baseName = item.descricao.split(' (')[0];
-              const estaAberto = gruposAbertos[item.id];
-              const parcelasDoGrupo = transacoesFiltradas.filter(t => t.descricao.startsWith(baseName) && t.totalParcelas > 1).sort((a,b) => a.parcelaAtual - b.parcelaAtual);
-              const pagasCount = parcelasDoGrupo.filter(t => t.status === 'PAGO').length;
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <th className="p-6 text-center">Data</th>
+                <th className="p-6">Descrição / Informações</th>
+                <th className="p-6 text-center">Status / Progresso</th>
+                <th className="p-8 text-right">Valor Parcela</th>
+                <th className="p-6 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {itensDaPagina.map((item) => {
+                const baseName = item.descricao.split(' (')[0];
+                const grupoKey = `${baseName}-${item.valor}-${item.banco}`;
+                const estaAberto = gruposAbertos[grupoKey];
+                
+                const parcelasDoGrupo = transacoesFiltradas.filter(t => 
+                  t.descricao.startsWith(baseName) && 
+                  t.valor === item.valor && 
+                  t.totalParcelas > 1
+                ).sort((a,b) => a.parcelaAtual - b.parcelaAtual);
 
-              return (
-                <React.Fragment key={item.id}>
-                  <tr className={`transition-all ${item.tipo === 'ENTRADA' ? 'bg-emerald-50/10' : 'bg-rose-50/10'}`}>
-                    <td className="p-8">
-                      <div className="flex items-center gap-4">
-                        {item.totalParcelas > 1 && (
-                          <button onClick={() => setGruposAbertos(prev => ({...prev, [item.id]: !estaAberto}))} className={`p-2 rounded-xl transition-all ${estaAberto ? 'bg-blue-600 text-white shadow-lg rotate-180' : 'bg-slate-100 text-slate-400'}`}><ChevronDown size={16} /></button>
-                        )}
-                        <div className="flex flex-col">
-                          <span className="font-black text-slate-800 uppercase text-sm tracking-tight">{baseName}</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mt-1"><Tag size={10}/> {item.categoria}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-8 text-center"><span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase bg-slate-50 border border-slate-100">{item.tipoConta}</span></td>
-                    <td className="p-8 text-center">
-                      <div className="flex items-center justify-center gap-3">
-                        {item.totalParcelas > 1 ? (
-                          <div className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[9px] font-black uppercase inline-flex items-center gap-2"><Layers size={12}/> {pagasCount} / {item.totalParcelas}</div>
-                        ) : (
-                          item.status === 'PAGO' ? (
-                            <button onClick={() => handleUpdateStatus(item.id, 'PENDENTE')} className="group bg-emerald-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 mx-auto"><CheckCircle2 size={14}/> Pago <RotateCcw size={12} className="hidden group-hover:block ml-1"/></button>
-                          ) : (
-                            <button onClick={() => setModalPagamento({...modalPagamento, aberto: true, item, parcelas: '1'})} className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg">Liquidar</button>
-                          )
-                        )}
-                        {/* BOTÃO EDITAR PRINCIPAL */}
-                        {item.status !== 'PAGO' && (
-                          <button onClick={() => abrirEdicao(item)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Edit3 size={18}/></button>
-                        )}
-                        {/* BOTÃO EXCLUIR PRINCIPAL */}
-                        <button onClick={() => setModalExcluir({ aberto: true, id: item.id })} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={18}/></button>
-                      </div>
-                    </td>
-                    <td className="p-8 text-right font-black text-base">{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                  </tr>
+                const pagas = parcelasDoGrupo.filter(t => t.status === 'PAGO').length;
+                const isEntrada = item.tipo === 'ENTRADA';
+                const corFundo = isEntrada ? 'bg-emerald-50/40 hover:bg-emerald-50/80' : 'bg-rose-50/40 hover:bg-rose-50/80';
 
-                  {/* PARCELAS INDIVIDUAIS COM OPÇÃO DE PAGAMENTO DETALHADO */}
-                  {estaAberto && parcelasDoGrupo.map((parc) => (
-                    <tr key={parc.id} className="bg-slate-50/50 border-l-4 border-blue-500">
-                      <td className="p-4 pl-20 text-[10px] font-black text-slate-400 uppercase">
-                        {parc.parcelaAtual}º Parc - Vecto: {new Date(parc.data).toLocaleDateString('pt-BR')}
+                return (
+                  <React.Fragment key={item.id}>
+                    <tr className={`transition-all ${corFundo}`}>
+                      <td className="p-6 text-center">
+                        <span className="text-xs text-slate-600 font-black">{formatarDataExibicao(item.data)}</span>
                       </td>
-                      <td colSpan="2" className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-3">
-                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${parc.status === 'PAGO' ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'}`}>
-                            {parc.status} {parc.status === 'PAGO' && `(${parc.formaPagamento})`}
-                          </span>
-                          
-                          {parc.status === 'PAGO' ? (
-                            <button disabled={processandoId === parc.id} onClick={() => handleUpdateStatus(parc.id, 'PENDENTE')} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg" title="Estornar"><RotateCcw size={16}/></button>
-                          ) : (
-                            <button onClick={() => setModalPagamento({...modalPagamento, aberto: true, item: parc, parcelas: '1'})} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Informar Pagamento Detalhado"><Check size={18}/></button>
+                      <td className="p-6">
+                        <div className="flex items-center gap-3">
+                          {item.totalParcelas > 1 && (
+                            <button onClick={() => setGruposAbertos(p => ({...p, [grupoKey]: !estaAberto}))} className={`p-1.5 rounded-lg transition-all ${estaAberto ? 'bg-blue-600 text-white rotate-180 shadow-md' : 'bg-white/70 text-slate-400'}`}>
+                              <ChevronDown size={14} />
+                            </button>
                           )}
+                          <div className="flex flex-col">
+                            <span className="font-black text-slate-800 text-sm uppercase tracking-tight">
+                              {baseName}
+                              {item.totalParcelas > 1 && <span className="ml-2 text-[9px] bg-white/80 px-2 py-0.5 rounded text-blue-600 font-black border border-blue-100">{item.totalParcelas}X</span>}
+                            </span>
+                            <span className="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-0.5">
+                              <Landmark size={10} className="text-blue-500"/> {item.banco} | <Tag size={10} className="text-slate-400"/> {item.categoria} | <CreditCard size={10} className="text-slate-400"/> {item.formaPagamento}
+                            </span>
+                          </div>
                         </div>
                       </td>
-                      <td className="p-4 text-right">
-                        <span className="text-xs font-black text-slate-500">{Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                      <td className="p-6 text-center">
+                        {item.totalParcelas > 1 ? (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border ${pagas === item.totalParcelas ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-blue-600 text-white border-blue-500'}`}>
+                            <Layers size={10} /> {pagas}/{item.totalParcelas} PAGAS
+                          </div>
+                        ) : (
+                          <button disabled={processandoId === item.id} onClick={() => handleAlternarStatus(item)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-sm transition-all border ${
+                            item.status === 'PAGO' ? 'bg-emerald-600 text-white border-emerald-500' : 
+                            item.status === 'EM ABERTO' ? 'bg-blue-600 text-white border-blue-500' : 'bg-orange-500 text-white border-orange-400'
+                          }`}>
+                            {item.status}
+                          </button>
+                        )}
+                      </td>
+                      <td className={`p-8 text-right font-black text-base ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {isEntrada ? '+ ' : '- '}{Number(item.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td className="p-6 text-center">
+                        <button onClick={() => setModalConfirmacao({ aberto: true, id: item.id, descricao: item.descricao })} className="p-2.5 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all shadow-sm"><Trash2 size={18} /></button>
                       </td>
                     </tr>
-                  ))}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+
+                    {estaAberto && parcelasDoGrupo.map((parc) => (
+                      <tr key={parc.id} className={`animate-in slide-in-from-top-1 duration-200 border-l-4 ${isEntrada ? 'bg-emerald-50/20 border-emerald-500' : 'bg-rose-50/20 border-rose-500'}`}>
+                        <td className="p-4 text-center text-[10px] text-slate-400 font-bold italic">{formatarDataExibicao(parc.data)}</td>
+                        <td className="p-4 pl-16">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-600 text-[11px] uppercase">{parc.descricao}</span>
+                              <span className="text-[7px] font-black text-slate-400 uppercase opacity-60">{parc.formaPagamento}</span>
+                            </div>
+                        </td>
+                        <td className="p-4 text-center">
+                            <button disabled={processandoId === parc.id} onClick={() => handleAlternarStatus(parc)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase shadow-sm ${
+                              parc.status === 'PAGO' ? 'bg-emerald-600 text-white' : 
+                              parc.status === 'EM ABERTO' ? 'bg-blue-500 text-white' : 'bg-orange-500 text-white'
+                            }`}>{processandoId === parc.id ? <Loader2 className="animate-spin" size={10} /> : parc.status}</button>
+                        </td>
+                        <td className={`p-4 text-right font-bold text-xs ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {Number(parc.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="p-4 text-center opacity-10"><Tag size={12}/></td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* PAGINAÇÃO */}
-      {totalPaginas > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-6">
-          <button disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)} className="p-2 rounded-xl bg-white border disabled:opacity-30"><ChevronLeft/></button>
-          <span className="text-xs font-black text-slate-400 uppercase">Página {paginaAtual} de {totalPaginas}</span>
-          <button disabled={paginaAtual === totalPaginas} onClick={() => setPaginaAtual(p => p + 1)} className="p-2 rounded-xl bg-white border disabled:opacity-30"><ChevronRight/></button>
-        </div>
-      )}
-
-      {/* MODAL LIQUIDAR (USADO PARA TÍTULOS E PARCELAS) */}
-      {modalPagamento.aberto && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100">
-            <div className="p-8 bg-emerald-600 text-white flex justify-between items-center italic">
-              <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3"><DollarSign size={24}/> Informar Pagamento</h3>
-              <button onClick={() => setModalPagamento({ ...modalPagamento, aberto: false })}><X size={24} /></button>
-            </div>
-            <form onSubmit={handleEfetivarBaixa} className="p-10 space-y-5">
-               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 mb-2">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Item selecionado</p>
-                  <p className="text-lg font-black text-slate-800 uppercase leading-tight">{modalPagamento.item?.descricao}</p>
-                  <p className="text-2xl font-black text-emerald-600 mt-2 tracking-tighter">R$ {Number(modalPagamento.item?.valor).toLocaleString('pt-BR')}</p>
-               </div>
-               
-               <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest ml-1 italic">Data Real do Pagamento</label>
-                    <input type="date" required value={modalPagamento.data} onChange={e => setModalPagamento({...modalPagamento, data: e.target.value})} className="w-full p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-black text-emerald-700 outline-none focus:ring-4 focus:ring-emerald-200 transition-all" />
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest ml-1">Banco Origem</label>
-                    <div className="relative">
-                      <Landmark className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
-                      <select value={modalPagamento.banco} onChange={e => setModalPagamento({...modalPagamento, banco: e.target.value})} className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none">
-                        {bancos.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest ml-1">Forma de Pagto</label>
-                    <div className="relative">
-                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
-                      <select value={modalPagamento.forma} onChange={e => setModalPagamento({...modalPagamento, forma: e.target.value})} className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none">
-                        {formasPagamento.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                    </div>
-                  </div>
-               </div>
-
-               {/* PARCELAMENTO SÓ APARECE SE NÃO FOR UMA PARCELA JÁ EXISTENTE */}
-               {modalPagamento.item?.totalParcelas <= 1 && (
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest ml-1">Dividir em Parcelas?</label>
-                    <select value={modalPagamento.parcelas} onChange={e => setModalPagamento({...modalPagamento, parcelas: e.target.value})} className="w-full p-4 bg-blue-50 text-blue-700 border border-blue-100 rounded-2xl font-black text-sm outline-none">
-                      <option value="1">NÃO (PAGAMENTO ÚNICO)</option>
-                      {Array.from({ length: 119 }, (_, i) => i + 2).map(n => <option key={n} value={n}>{n}x</option>)}
-                    </select>
-                  </div>
-               )}
-
-               <button type="submit" disabled={processandoId} className="w-full bg-emerald-600 text-white p-6 rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-emerald-100 transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50">
-                  {processandoId ? <Loader2 className="animate-spin mx-auto"/> : "Confirmar e Lançar"}
-               </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL NOVO REGISTRO / EDIÇÃO */}
+      {/* MODAL NOVO REGISTRO - LAYOUT ATUALIZADO */}
       {modalAberto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100">
-            <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">{modoEdicao ? 'Editar Registro' : 'Agendar Novo Título'}</h3>
-              <button onClick={fecharModal} className="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><X size={24}/></button>
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-8 bg-slate-50 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-600 rounded-xl text-white"><Plus size={20}/></div>
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Novo Lançamento</h3>
+              </div>
+              <button onClick={() => setModalAberto(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSalvar} className="p-10 space-y-6">
-              <input type="text" required placeholder="Descrição" className="w-full p-4 bg-slate-50 rounded-2xl border-none font-bold outline-none" value={novoItem.descricao} onChange={e => setNovoItem({...novoItem, descricao: e.target.value})} />
-              <input type="number" step="0.01" required placeholder="Valor (R$)" className="w-full p-4 bg-slate-50 rounded-2xl border-none font-black text-lg outline-none" value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} />
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'ENTRADA'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-500 text-white' : 'text-slate-400'}`}>RECEITA</button>
-                  <button type="button" onClick={() => setNovoItem({...novoItem, tipo: 'SAIDA'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'SAIDA' ? 'bg-rose-500 text-white' : 'text-slate-400'}`}>DESPESA</button>
+
+            <form onSubmit={handleSalvar} className="p-8 space-y-6 overflow-y-auto">
+              {/* SEÇÃO: O QUE É? */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><AlignLeft size={12}/> Descrição do Título</label>
+                  <input type="text" required value={novoItem.descricao} onChange={e => setNovoItem({...novoItem, descricao: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-all" placeholder="Ex: Mensalidade Internet Pillar IT" />
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button type="button" onClick={() => setNovoItem({...novoItem, tipoConta: 'PF'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipoConta === 'PF' ? 'bg-white text-blue-600' : 'text-slate-400'}`}>PF</button>
-                  <button type="button" onClick={() => setNovoItem({...novoItem, tipoConta: 'PJ'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${novoItem.tipoConta === 'PJ' ? 'bg-white text-blue-600' : 'text-slate-400'}`}>PJ</button>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><CalendarDays size={12}/> Data Vencimento</label>
+                  <input type="date" required value={novoItem.data} onChange={e => setNovoItem({...novoItem, data: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Banknote size={12}/> Valor Total</label>
+                  <input type="number" step="0.01" required value={novoItem.valor} onChange={e => setNovoItem({...novoItem, valor: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-sm outline-none focus:ring-2 focus:ring-blue-600" placeholder="0.00" />
                 </div>
               </div>
-              <button type="submit" disabled={isSalvando} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl">Confirmar</button>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* MODAL EXCLUIR */}
-      {modalExcluir.aberto && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 text-center shadow-2xl border border-slate-100">
-            <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce"><AlertTriangle size={48}/></div>
-            <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mb-2">Excluir?</h3>
-            <p className="text-slate-400 text-[10px] font-black mb-8 uppercase tracking-widest">Ação irreversível.</p>
-            <div className="flex gap-4">
-              <button onClick={() => setModalExcluir({ aberto: false, id: null })} className="flex-1 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600">Voltar</button>
-              <button onClick={handleExcluir} className="flex-1 bg-rose-600 text-white py-4 rounded-[1.2rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all">Confirmar</button>
-            </div>
+              {/* SEÇÃO: COMO PAGA? */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                <div>
+                  <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><Landmark size={12}/> Banco de Saída/Entrada</label>
+                  <select value={novoItem.banco} onChange={e => setNovoItem({...novoItem, banco: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none cursor-pointer focus:border-blue-600">
+                    {bancos.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-blue-600 uppercase mb-1.5 flex items-center gap-2 ml-1"><CreditCard size={12}/> Forma de Pagamento</label>
+                  <select value={novoItem.formaPagamento} onChange={e => setNovoItem({...novoItem, formaPagamento: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none cursor-pointer focus:border-blue-600">
+                    {formasPagamento.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Tag size={12}/> Categoria</label>
+                  <select value={novoItem.categoria} onChange={e => setNovoItem({...novoItem, categoria: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                    {categoriasGerais.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-2 ml-1"><Layers size={12}/> Parcelamento</label>
+                  <select value={novoItem.parcelas} onChange={e => setNovoItem({...novoItem, parcelas: e.target.value})} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-blue-700 text-sm outline-none">
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* SEÇÃO: FLUXO */}
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between pt-2">
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
+                  <button 
+                    type="button"
+                    onClick={() => setNovoItem({...novoItem, tipo: 'ENTRADA'})}
+                    className={`flex-1 md:px-6 py-2.5 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}
+                  >
+                    <div className="flex items-center justify-center gap-2"><ArrowUpCircle size={14}/> RECEITA</div>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setNovoItem({...novoItem, tipo: 'SAIDA'})}
+                    className={`flex-1 md:px-6 py-2.5 rounded-xl text-[10px] font-black transition-all ${novoItem.tipo === 'SAIDA' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500'}`}
+                  >
+                    <div className="flex items-center justify-center gap-2"><ArrowDownCircle size={14}/> DESPESA</div>
+                  </button>
+                </div>
+
+                <button type="submit" disabled={isSalvando} className="w-full md:w-auto bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 flex items-center justify-center gap-3">
+                  {isSalvando ? <Loader2 className="animate-spin" size={18} /> : <>Efetivar Lançamento <Plus size={16}/></>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
