@@ -223,16 +223,25 @@ export default function Lancamentos() {
                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${item.tipoConta === 'PJ' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{item.tipoConta}</span>
                       </td>
                       <td className="p-6 text-center">
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border ${pagas === item.totalParcelas && item.totalParcelas > 0 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-blue-600 text-white border-blue-400 shadow-sm'}`}>
-                           {item.totalParcelas > 1 ? <Layers size={10} /> : <CheckCircle2 size={10}/>} {pagas}/{item.totalParcelas || 1} PAGAS
-                        </div>
+  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border transition-all ${pagas === (item.totalParcelas || 1) ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' : 'bg-blue-600 text-white border-blue-400 shadow-sm'}`}>
+    {item.totalParcelas > 1 ? <Layers size={10} /> : <CheckCircle2 size={10}/>} 
+    {pagas}/{item.totalParcelas || 1} PAGAS
+  </div>
                       </td>
                       <td className="p-8 text-right">
                         <div className={`font-black text-base ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {valorBrutoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>
-                        {item.totalParcelas > 1 && <div className="text-[9px] font-bold text-slate-400 uppercase italic">Méd. {Number(item.valor).toLocaleString('pt-BR')} / parc</div>}
-                      </td>
+                       {item.totalParcelas <= 1 && (
+    <button 
+      disabled={processandoId === item.id} 
+      onClick={() => handleAlternarStatus(item)} 
+      className={`ml-2 p-1.5 rounded-lg border transition-all active:scale-90 ${item.status === 'PAGO' ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : 'text-slate-400 border-slate-200 bg-white'}`}
+    >
+      {processandoId === item.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={14}/>}
+    </button>
+  )}
+</td>
                       <td className="p-6 text-center">
                         <div className="flex items-center justify-center gap-2">
                            <button onClick={() => abrirEdicaoMaster(item, valorBrutoTotal)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all" title="Editar Contrato"><Edit3 size={18}/></button>
