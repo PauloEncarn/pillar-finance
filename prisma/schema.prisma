@@ -11,7 +11,7 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid())
   name      String
   email     String   @unique
   password  String
@@ -21,23 +21,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relacionamento com Logs
+  // --- RELACIONAMENTOS ---
   logs      LogSistema[] 
 
   @@map("users")
 }
 
 model Lancamento {
-  id             String   @id @default(uuid()) @db.Uuid
+  id             String   @id @default(uuid())
   descricao      String
   valor          Float
   tipo           String   // ENTRADA ou SAIDA
   categoria      String
   status         String   @default("PENDENTE")
   data           DateTime
-  banco          String?  
+  banco          String?  // CAIXA, ITAU, BRADESCO, SANTANDER
   tipoConta      String?  // PJ ou PF
-  formaPagamento String?  
+  formaPagamento String?  // CARTAO, PIX, BOLETO, TED, CREDITO
   parcelaAtual   Int?     @default(1)
   totalParcelas  Int?     @default(1)
 
@@ -48,16 +48,15 @@ model Lancamento {
 }
 
 model LogSistema {
-  id            String   @id @default(uuid()) @db.Uuid
-  data          DateTime @default(now())
-  evento        String
-  status        String   // 'OK' ou 'ERRO'
-  detalhes      String?
-  usuario_email String?
+  id        String   @id @default(uuid())
+  acao      String   // Ex: "Aprovou acesso", "Alterou Foto"
+  detalhes  String?
   
-  // Relacionamento corrigido: Ambos agora são @db.Uuid
-  user          User?    @relation(fields: [usuarioId], references: [id])
-  usuarioId     String?  @db.Uuid
+  // Relacionamento com quem fez a ação
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
 
   @@map("logs_sistema")
 }
