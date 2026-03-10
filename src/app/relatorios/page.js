@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileSpreadsheet, Download, Loader2, Calendar, Search, 
   Filter, ArrowUpCircle, ArrowDownCircle, RotateCcw,
-  Banknote, CreditCard, Landmark, Tag
+  Banknote, CreditCard, Landmark, Tag, User
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -42,7 +42,7 @@ export default function Relatorios() {
           setCategoriasDisponiveis(cats);
         }
       } catch (error) {
-        console.error("Erro ao carregar dados do relatório");
+        console.error("Erro ao carregar dados");
       } finally {
         setIsLoading(false);
       }
@@ -50,10 +50,8 @@ export default function Relatorios() {
     carregarDados();
   }, []);
 
-  // LÓGICA DE FILTRO REFORÇADA (CORREÇÃO DE FUSO HORÁRIO)
   const filtrados = useMemo(() => {
     return transacoes.filter(t => {
-      // Ajuste para garantir que a data UTC do banco seja lida como data Local
       const dataOriginal = new Date(t.data);
       const dataLocal = new Date(dataOriginal.getTime() + dataOriginal.getTimezoneOffset() * 60000);
       const dataItemStr = dataLocal.toISOString().split('T')[0];
@@ -71,7 +69,7 @@ export default function Relatorios() {
       return matchesDataInicio && matchesDataFim && matchesTipo && matchesStatus && 
              matchesCategoria && matchesBanco && matchesTipoConta && 
              matchesFormaPagamento && matchesBusca;
-    }).sort((a, b) => new Date(a.data) - new Date(b.data)); // Ordena por data crescente para o relatório
+    }).sort((a, b) => new Date(a.data) - new Date(b.data));
   }, [transacoes, filtros]);
 
   const formatarDataExibicao = (dataString) => {
@@ -96,21 +94,25 @@ export default function Relatorios() {
     const worksheet = XLSX.utils.json_to_sheet(dadosParaExcel);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Financeiro");
-
     const dataRef = filtros.dataInicio ? `${filtros.dataInicio}_a_${filtros.dataFim || 'hoje'}` : 'Geral';
     XLSX.writeFile(workbook, `Relatorio_Pillar_${dataRef}.xlsx`);
   };
 
   const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   
-  const totalEntrada = filtrados.filter(t => t.tipo === 'ENTRADA').reduce((acc, curr) => acc + Number(curr.valor), 0);
-  const totalSaida = filtrados.filter(t => t.tipo === 'SAIDA').reduce((acc, curr) => acc + Number(curr.valor), 0);
-  const saldoPeriodo = totalEntrada - totalSaida;
+  // --- LÓGICA DE CÁLCULOS ANALÍTICOS ---
+  const totalReceitasRealizado = filtrados.filter(t => t.tipo === 'ENTRADA' && t.status === 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
+  const totalDespesasRealizado = filtrados.filter(t => t.tipo === 'SAIDA' && t.status === 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
+  const totalReceitasFuturo = filtrados.filter(t => t.tipo === 'ENTRADA' && t.status !== 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
+  const totalDespesasFuturo = filtrados.filter(t => t.tipo === 'SAIDA' && t.status !== 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
+  
+  const saldoRealizado = totalReceitasRealizado - totalDespesasRealizado;
+  const saldoProjetado = totalReceitasFuturo - totalDespesasFuturo;
 
   if (isLoading) return (
     <div className="h-screen w-full flex flex-col items-center justify-center p-10 bg-slate-50 gap-4">
       <Loader2 className="animate-spin text-emerald-600" size={48} />
-      <p className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-400">Sincronizando Auditoria...</p>
+      <p className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-400">Gerando Relatório...</p>
     </div>
   );
 
@@ -130,16 +132,10 @@ export default function Relatorios() {
         </div>
         
         <div className="flex gap-3 w-full lg:w-auto">
-          <button 
-            onClick={() => setFiltros(initialState)}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all"
-          >
+          <button onClick={() => setFiltros(initialState)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">
             <RotateCcw size={16} /> Limpar
           </button>
-          <button 
-            onClick={gerarExcel}
-            className="flex-1 lg:flex-none bg-slate-900 hover:bg-emerald-600 text-white px-8 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 transition-all shadow-xl shadow-slate-200"
-          >
+          <button onClick={gerarExcel} className="flex-1 lg:flex-none bg-slate-900 hover:bg-emerald-600 text-white px-8 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 transition-all shadow-xl">
             <Download size={16} /> Exportar XLSX
           </button>
         </div>
@@ -185,30 +181,26 @@ export default function Relatorios() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><Tag size={10}/> Categoria</label>
+          <div className="flex flex-col"><label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><Tag size={10}/> Categoria</label>
             <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 outline-none" value={filtros.categoria} onChange={e => setFiltros({...filtros, categoria: e.target.value})}>
               <option value="TODAS">TODAS AS CATEGORIAS</option>
               {categoriasDisponiveis.map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
           </div>
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><Landmark size={10}/> Banco</label>
+          <div className="flex flex-col"><label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><Landmark size={10}/> Banco</label>
             <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 outline-none" value={filtros.banco} onChange={e => setFiltros({...filtros, banco: e.target.value})}>
               <option value="TODOS">TODOS OS BANCOS</option>
               {bancos.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><User size={10}/> Tipo de Conta</label>
+          <div className="flex flex-col"><label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><User size={10}/> Tipo de Conta</label>
             <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 outline-none" value={filtros.tipoConta} onChange={e => setFiltros({...filtros, tipoConta: e.target.value})}>
               <option value="TODOS">PJ & PF</option>
               <option value="PJ">PESSOA JURÍDICA</option>
               <option value="PF">PESSOA FÍSICA</option>
             </select>
           </div>
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><CreditCard size={10}/> Meio de Pagamento</label>
+          <div className="flex flex-col"><label className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-1 flex items-center gap-1"><CreditCard size={10}/> Meio de Pagamento</label>
             <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 outline-none" value={filtros.formaPagamento} onChange={e => setFiltros({...filtros, formaPagamento: e.target.value})}>
               <option value="TODOS">TODOS OS MEIOS</option>
               {formasPagamento.map(f => <option key={f} value={f}>{f}</option>)}
@@ -232,13 +224,13 @@ export default function Relatorios() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filtrados.length === 0 ? (
-                <tr><td colSpan="5" className="p-24 text-center text-slate-300 font-black uppercase text-[11px] tracking-[0.3em]">Nenhum registro no período selecionado.</td></tr>
+                <tr><td colSpan="5" className="p-24 text-center text-slate-300 font-black uppercase text-[11px] tracking-[0.3em]">Nenhum registro encontrado.</td></tr>
               ) : (
                 filtrados.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-all group">
                     <td className="p-6 text-center text-[11px] text-slate-600 font-black">{formatarDataExibicao(item.data)}</td>
                     <td className="p-6">
-                      <div className="font-black text-slate-800 uppercase tracking-tight text-xs group-hover:text-blue-600 transition-colors">{item.descricao}</div>
+                      <div className="font-black text-slate-800 uppercase tracking-tight text-xs group-hover:text-emerald-600 transition-colors">{item.descricao}</div>
                       <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{item.categoria}</div>
                     </td>
                     <td className="p-6">
@@ -262,20 +254,52 @@ export default function Relatorios() {
         </div>
       </div>
       
-      {/* SUMÁRIO FINANCEIRO */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center group hover:border-emerald-200 transition-all">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><ArrowUpCircle size={14} className="text-emerald-500" /> Receitas do Período</p>
-          <p className="text-2xl font-black text-emerald-600">{formatMoney(totalEntrada)}</p>
+      {/* SUMÁRIO ANALÍTICO E PROJETADO */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* CARD RECEITAS (REALIZADO + FUTURO) */}
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
+            Receitas <span className="text-emerald-500 italic">Realizado</span>
+          </p>
+          <div className="space-y-1">
+            <p className="text-xl font-black text-emerald-600 leading-none">{formatMoney(totalReceitasRealizado)}</p>
+            <p className="text-[10px] font-bold text-slate-400 italic">A entrar (futuras): {formatMoney(totalReceitasFuturo)}</p>
+          </div>
         </div>
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center group hover:border-rose-200 transition-all">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><ArrowDownCircle size={14} className="text-rose-500" /> Despesas do Período</p>
-          <p className="text-2xl font-black text-rose-600">{formatMoney(totalSaida)}</p>
+
+        {/* CARD DESPESAS (REALIZADO + FUTURO) */}
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
+            Despesas <span className="text-rose-500 italic">Realizado</span>
+          </p>
+          <div className="space-y-1">
+            <p className="text-xl font-black text-rose-600 leading-none">{formatMoney(totalDespesasRealizado)}</p>
+            <p className="text-[10px] font-bold text-slate-400 italic">A pagar (futuras): {formatMoney(totalDespesasFuturo)}</p>
+          </div>
         </div>
-        <div className={`p-8 rounded-[2rem] shadow-2xl flex flex-col items-center text-white transition-all transform hover:scale-105 ${saldoPeriodo >= 0 ? 'bg-slate-900' : 'bg-rose-900'} sm:col-span-1`}>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Saldo Líquido Final</p>
-          <p className="text-3xl font-black">{formatMoney(saldoPeriodo)}</p>
+
+        {/* CARD BALANÇO ATUAL (CAIXA REAL) */}
+        <div className="bg-slate-900 p-6 rounded-[2rem] shadow-xl text-white">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Saldo em Caixa (Realizado)</p>
+          <p className={`text-2xl font-black ${saldoRealizado >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {formatMoney(saldoRealizado)}
+          </p>
+          <div className="mt-2 pt-2 border-t border-white/10 flex items-center gap-2">
+            <div className={`h-1.5 w-1.5 rounded-full ${saldoRealizado >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+            <span className="text-[8px] font-black uppercase text-slate-400">Total Liquidado</span>
+          </div>
         </div>
+
+        {/* CARD BALANÇO DAS FUTURAS (PROJETADO) */}
+        <div className={`p-6 rounded-[2rem] shadow-2xl text-white transition-all ${saldoProjetado >= 0 ? 'bg-blue-900' : 'bg-orange-900'}`}>
+          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-3 italic">Balanço das Futuras</p>
+          <p className="text-2xl font-black">{formatMoney(saldoProjetado)}</p>
+          <div className="mt-2 pt-2 border-t border-white/10">
+            <span className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Expectativa de fluxo pendente</span>
+          </div>
+        </div>
+
       </div>
     </div>
   );
