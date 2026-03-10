@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileSpreadsheet, Download, Loader2, Calendar, Search, 
   Filter, ArrowUpCircle, ArrowDownCircle, RotateCcw,
-  Banknote, CreditCard, Landmark, Tag, User
+  Banknote, CreditCard, Landmark, Tag, User, ChevronDown, ChevronUp
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -12,6 +12,7 @@ export default function Relatorios() {
   const [transacoes, setTransacoes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState([]);
+  const [mostrarFuturos, setMostrarFuturos] = useState(false);
 
   const initialState = {
     dataInicio: '', 
@@ -100,14 +101,14 @@ export default function Relatorios() {
 
   const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   
-  // --- LÓGICA DE CÁLCULOS ANALÍTICOS ---
+  // --- LÓGICA DE CÁLCULOS ---
   const totalReceitasRealizado = filtrados.filter(t => t.tipo === 'ENTRADA' && t.status === 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
   const totalDespesasRealizado = filtrados.filter(t => t.tipo === 'SAIDA' && t.status === 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
   const totalReceitasFuturo = filtrados.filter(t => t.tipo === 'ENTRADA' && t.status !== 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
   const totalDespesasFuturo = filtrados.filter(t => t.tipo === 'SAIDA' && t.status !== 'PAGO').reduce((acc, curr) => acc + Number(curr.valor), 0);
   
   const saldoRealizado = totalReceitasRealizado - totalDespesasRealizado;
-  const saldoProjetado = totalReceitasFuturo - totalDespesasFuturo;
+  const saldoProjetadoFuturas = totalReceitasFuturo - totalDespesasFuturo;
 
   if (isLoading) return (
     <div className="h-screen w-full flex flex-col items-center justify-center p-10 bg-slate-50 gap-4">
@@ -254,52 +255,62 @@ export default function Relatorios() {
         </div>
       </div>
       
-      {/* SUMÁRIO ANALÍTICO E PROJETADO */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* CARD RECEITAS (REALIZADO + FUTURO) */}
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
-            Receitas <span className="text-emerald-500 italic">Realizado</span>
-          </p>
-          <div className="space-y-1">
-            <p className="text-xl font-black text-emerald-600 leading-none">{formatMoney(totalReceitasRealizado)}</p>
-            <p className="text-[10px] font-bold text-slate-400 italic">A entrar (futuras): {formatMoney(totalReceitasFuturo)}</p>
+      {/* SUMÁRIO ORIGINAL COM EXPANSÍVEL */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+          <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
+            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Receitas (Pagas)</p>
+            <p className="text-xl md:text-2xl font-black text-emerald-600">{formatMoney(totalReceitasRealizado)}</p>
+          </div>
+          <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
+            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Despesas (Pagas)</p>
+            <p className="text-xl md:text-2xl font-black text-rose-600">{formatMoney(totalDespesasRealizado)}</p>
+          </div>
+          <div className={`p-5 md:p-6 rounded-2xl shadow-xl flex flex-col items-center text-white transition-all ${saldoRealizado >= 0 ? 'bg-slate-900' : 'bg-rose-900'} sm:col-span-1`}>
+            <p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Saldo Líquido Realizado</p>
+            <p className="text-2xl md:text-3xl font-black">{formatMoney(saldoRealizado)}</p>
           </div>
         </div>
 
-        {/* CARD DESPESAS (REALIZADO + FUTURO) */}
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
-            Despesas <span className="text-rose-500 italic">Realizado</span>
-          </p>
-          <div className="space-y-1">
-            <p className="text-xl font-black text-rose-600 leading-none">{formatMoney(totalDespesasRealizado)}</p>
-            <p className="text-[10px] font-bold text-slate-400 italic">A pagar (futuras): {formatMoney(totalDespesasFuturo)}</p>
-          </div>
-        </div>
+        {/* PARTE EXPANSÍVEL: DETALHAMENTO FUTURO */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
+          <button 
+            onClick={() => setMostrarFuturos(!mostrarFuturos)}
+            className="w-full flex items-center justify-between p-4 px-6 hover:bg-slate-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Calendar size={14}/></div>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ver detalhamento dos lançamentos futuros</span>
+            </div>
+            {mostrarFuturos ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+          </button>
 
-        {/* CARD BALANÇO ATUAL (CAIXA REAL) */}
-        <div className="bg-slate-900 p-6 rounded-[2rem] shadow-xl text-white">
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Saldo em Caixa (Realizado)</p>
-          <p className={`text-2xl font-black ${saldoRealizado >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {formatMoney(saldoRealizado)}
-          </p>
-          <div className="mt-2 pt-2 border-t border-white/10 flex items-center gap-2">
-            <div className={`h-1.5 w-1.5 rounded-full ${saldoRealizado >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-            <span className="text-[8px] font-black uppercase text-slate-400">Total Liquidado</span>
-          </div>
+          {mostrarFuturos && (
+            <div className="p-6 pt-2 border-t border-slate-50 animate-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">A entrar (Futuro)</p>
+                  <p className="text-lg font-black text-blue-600">{formatMoney(totalReceitasFuturo)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">A pagar (Futuro)</p>
+                  <p className="text-lg font-black text-orange-600">{formatMoney(totalDespesasFuturo)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Balanço das Futuras</p>
+                  <p className={`text-lg font-black ${saldoProjetadoFuturas >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {formatMoney(saldoProjetadoFuturas)}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter leading-relaxed">
+                  * Este detalhamento considera apenas itens com status PENDENTE ou EM ABERTO dentro do período filtrado.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-
-        {/* CARD BALANÇO DAS FUTURAS (PROJETADO) */}
-        <div className={`p-6 rounded-[2rem] shadow-2xl text-white transition-all ${saldoProjetado >= 0 ? 'bg-blue-900' : 'bg-orange-900'}`}>
-          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-3 italic">Balanço das Futuras</p>
-          <p className="text-2xl font-black">{formatMoney(saldoProjetado)}</p>
-          <div className="mt-2 pt-2 border-t border-white/10">
-            <span className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Expectativa de fluxo pendente</span>
-          </div>
-        </div>
-
       </div>
     </div>
   );
