@@ -26,12 +26,18 @@ export default function Login() {
     setErro('');
     setLoading(true);
 
+    // NORMALIZAÇÃO: Garante que o e-mail vá para a API sempre em minúsculas e sem espaços extras
+    const emailTratado = formData.email.toLowerCase().trim();
+
     try {
       if (mode === 'login') {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email, password: formData.password }),
+          body: JSON.stringify({ 
+            email: emailTratado, 
+            password: formData.password 
+          }),
         });
 
         const data = await res.json();
@@ -52,7 +58,11 @@ export default function Login() {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          // Enviamos o e-mail já normalizado para o cadastro
+          body: JSON.stringify({ 
+            ...formData, 
+            email: emailTratado 
+          }),
         });
 
         const data = await res.json();
@@ -86,8 +96,10 @@ export default function Login() {
               <CheckCircle size={20} />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Bem-vindo, {successUser.name.split(' ')[0]}!</h2>
-          <p className="text-slate-400">Carregando seu painel...</p>
+          <h2 className="text-2xl font-bold text-white mb-2 italic uppercase tracking-tighter">
+            Bem-vindo, {successUser.name.split(' ')[0]}!
+          </h2>
+          <p className="text-slate-400 font-medium uppercase text-[10px] tracking-widest">Sincronizando seu ambiente...</p>
         </div>
       </div>
     );
@@ -97,27 +109,26 @@ export default function Login() {
     <div className="min-h-screen w-full flex items-center justify-center bg-slate-900 px-4">
       <div className="w-full max-w-md">
         
-        {/* CARD DE LOGIN (O MODELO QUE VOCÊ PEDIU) */}
         <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl space-y-8 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">
           
           {/* LOGO E TÍTULO */}
           <div className="flex flex-col items-center text-center">
             <div className="relative w-48 h-24 mb-2">
-              <Image src="/logo.jpg" alt="Logo" fill className="object-contain" priority />
+              <Image src="/logo.jpg" alt="Logo Pillar IT" fill className="object-contain" priority />
             </div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase italic">
               {mode === 'login' ? 'Pillar IT Management' : 'Criar Conta'}
             </h2>
-            <p className="text-slate-500 text-sm font-medium">
-              {mode === 'login' ? 'Gestão Financeira e Operacional' : 'Solicite seu acesso ao sistema'}
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">
+              {mode === 'login' ? 'Gestão Financeira e Operacional' : 'Solicite seu acesso ao núcleo'}
             </p>
           </div>
 
           {/* MENSAGEM DE ERRO */}
           {erro && (
-            <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl flex items-center gap-3 text-sm animate-bounce">
-              <AlertCircle size={20} />
-              <span className="font-bold">{erro}</span>
+            <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl flex items-center gap-3 text-[10px] font-black uppercase tracking-widest animate-bounce">
+              <AlertCircle size={18} />
+              <span>{erro}</span>
             </div>
           )}
 
@@ -131,7 +142,7 @@ export default function Login() {
                   <input
                     type="text"
                     required
-                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-sm uppercase"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
@@ -147,9 +158,10 @@ export default function Login() {
                   type="email"
                   required
                   placeholder="exemplo@pillarit.com.br"
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-sm"
                   value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  // UX: Força a exibição em minúsculas enquanto o usuário digita
+                  onChange={(e) => setFormData({...formData, email: e.target.value.toLowerCase()})}
                 />
               </div>
             </div>
@@ -162,7 +174,7 @@ export default function Login() {
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-sm"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                 />
@@ -172,12 +184,12 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-900 hover:bg-blue-800 text-white py-4 rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
+              className="w-full bg-slate-900 hover:bg-blue-700 text-white py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
             >
               {loading ? (
-                <Loader2 className="animate-spin" size={20} />
+                <Loader2 className="animate-spin" size={18} />
               ) : (
-                <>{mode === 'login' ? 'Entrar no Sistema' : 'Cadastrar agora'}</>
+                <>{mode === 'login' ? 'Acessar Terminal' : 'Registrar Solicitação'}</>
               )}
             </button>
           </form>
@@ -186,16 +198,16 @@ export default function Login() {
           <div className="pt-6 border-t border-slate-100 text-center">
             <button 
               onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-              className="text-slate-500 text-xs font-medium hover:text-blue-600 transition-colors"
+              className="text-slate-400 text-[9px] font-black uppercase tracking-widest hover:text-blue-600 transition-colors"
             >
-              {mode === 'login' ? 'Não tem uma conta? ' : 'Já possui cadastro? '}
-              <span className="font-bold underline">{mode === 'login' ? 'Criar conta' : 'Fazer Login'}</span>
+              {mode === 'login' ? 'Não possui credenciais? ' : 'Já possui acesso liberado? '}
+              <span className="font-black underline decoration-2 underline-offset-4">{mode === 'login' ? 'SOLICITAR CONTA' : 'IR PARA LOGIN'}</span>
             </button>
           </div>
         </div>
 
-        <p className="mt-8 text-center text-slate-500 text-[10px] uppercase font-bold tracking-[0.2em]">
-          &copy; 2026 M. Montranel - Todos os direitos reservados
+        <p className="mt-8 text-center text-slate-600 text-[10px] uppercase font-bold tracking-[0.3em] italic">
+          &copy; 2026 Pillar IT - Montranel Systems
         </p>
       </div>
     </div>

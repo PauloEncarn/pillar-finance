@@ -228,10 +228,16 @@ function TabAdminUsuarios({ notify }) {
     e.preventDefault();
     setLoading(true);
     try {
+      // Normalização: E-mail sempre em minúsculas e sem espaços antes de enviar para o banco
+      const dadosNormalizados = {
+        ...novoUser,
+        email: novoUser.email.toLowerCase().trim()
+      };
+
       const res = await fetch('/api/auth/register', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(novoUser) 
+        body: JSON.stringify(dadosNormalizados) 
       });
       if (res.ok) {
         notify("Usuário cadastrado!");
@@ -293,7 +299,14 @@ function TabAdminUsuarios({ notify }) {
                 </div>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                  <input type="email" required placeholder="E-MAIL" value={novoUser.email} onChange={e => setNovoUser({...novoUser, email: e.target.value.toLowerCase()})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-600" />
+                  <input 
+                    type="email" 
+                    required 
+                    placeholder="E-MAIL" 
+                    value={novoUser.email} 
+                    onChange={e => setNovoUser({...novoUser, email: e.target.value.toLowerCase()})} 
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-600" 
+                  />
                 </div>
                 <div className="relative">
                   <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
