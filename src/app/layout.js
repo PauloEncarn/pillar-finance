@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata = {
   title: "Montranel Finance",
   icons: {
-    icon: "/logo.jpg", 
+    icon: "/logo.png", 
   },
 };
 
