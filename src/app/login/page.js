@@ -24,10 +24,9 @@ export default function Login() {
     setErro('');
     setLoading(true);
 
-    // SOLUÇÃO PARA SUA DÚVIDA: 
-    // Não importa como o usuário digitou, aqui transformamos em minúsculo.
-    // Assim, "EXEMPLO@" e "exemplo@" viram a mesma coisa antes de consultar o banco.
-    const emailNormalizado = formData.email.toLowerCase().trim();
+    // REMOVEMOS O .toLowerCase() DAQUI
+    // Agora o e-mail vai EXATAMENTE como você digitou no campo
+    const emailParaEnvio = formData.email.trim();
 
     try {
       if (mode === 'login') {
@@ -35,7 +34,7 @@ export default function Login() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            email: emailNormalizado, 
+            email: emailParaEnvio, 
             password: formData.password 
           }),
         });
@@ -53,13 +52,12 @@ export default function Login() {
         }, 2500);
 
       } else {
-        // No cadastro também normalizamos para garantir que salve sempre em minúsculo
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             ...formData, 
-            email: emailNormalizado 
+            email: emailParaEnvio 
           }),
         });
 
@@ -144,11 +142,11 @@ export default function Login() {
                 <input
                   type="email"
                   required
-                  placeholder="exemplo@montranel.com"
+                  placeholder="EXEMPLO@MONTRANEL.COM"
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm"
                   value={formData.email}
-                  // Aqui garantimos que visualmente o usuário veja apenas minúsculas
-                  onChange={(e) => setFormData({...formData, email: e.target.value.toLowerCase()})}
+                  // REMOVIDO o toLowerCase() daqui para você usar maiúsculas livremente
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
                 />
               </div>
             </div>
