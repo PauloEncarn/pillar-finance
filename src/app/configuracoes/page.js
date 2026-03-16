@@ -386,90 +386,77 @@ function TabAdminUsuarios({ notify }) {
 
 // ABA SISTEMA CORRIGIDA
 function TabSistemaSMTP() {
-  const [dados, setDados] = useState({ 
-    smtp: { host: '---', online: false }, 
-    logs: [] 
-  });
-  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState({ host: '', port: '', user: '', pass: '' });
+  const [loading, setLoading] = useState(false);
+  const [statusTeste, setStatusTeste] = useState(null);
 
-  const fetchSistema = async () => {
+  const testarSMTP = async () => {
+    setLoading(true);
+    setStatusTeste(null);
     try {
-      setLoading(true);
-      const res = await fetch('/api/admin/sistema');
-      if (!res.ok) throw new Error("Erro na API");
+      const res = await fetch('/api/admin/testar-smtp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
       const data = await res.json();
       
-      // Garante que o estado receba um objeto válido mesmo se a API falhar
-      setDados({
-        smtp: data?.smtp || { host: '---', online: false },
-        logs: Array.isArray(data?.logs) ? data.logs : []
-      });
+      if (res.ok) {
+        setStatusTeste({ tipo: 'sucesso', msg: 'Conexão estabelecida com sucesso!' });
+      } else {
+        throw new Error(data.error || 'Falha na autenticação');
+      }
     } catch (e) {
-      console.error("Erro ao carregar sistema:", e);
+      setStatusTeste({ tipo: 'erro', msg: e.message });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchSistema(); }, []);
-
-  if (loading) return (
-    <div className="p-10 flex flex-col items-center justify-center gap-4">
-      <Loader2 className="animate-spin text-slate-300" size={32} />
-      <div className="uppercase font-black text-[10px] text-slate-400 tracking-widest">Sincronizando Núcleo...</div>
-    </div>
-  );
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
-      {/* CARD STATUS SMTP */}
-      <div className="bg-slate-900 text-white p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[250px]">
-        <div className="z-10">
-           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-8 flex items-center gap-2 italic">
-             <Server size={14} /> Núcleo SMTP
-           </h3>
-           <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10 w-fit">
-             <p className="text-[9px] text-slate-400 uppercase font-black mb-1">
-               Status do Host: {dados.smtp?.host || '---'}
-             </p>
-             <div className={`font-black flex items-center gap-2 text-sm md:text-base ${dados.smtp?.online ? 'text-emerald-400' : 'text-rose-400'}`}>
-               <div className="relative flex h-2.5 w-2.5">
-                 {dados.smtp?.online && (
-                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                 )}
-                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dados.smtp?.online ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500'}`}></span>
-               </div>
-               {dados.smtp?.online ? 'CONECTADO / ONLINE' : 'DESCONECTADO / ERRO'}
-             </div>
-           </div>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
+      {/* FORMULÁRIO DE CONFIGURAÇÃO */}
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 italic">Configurações de E-mail (SMTP)</h3>
+        
+        <div className="space-y-4">
+          <input type="text" placeholder="HOST (ex: smtp.gmail.com)" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" 
+            value={config.host} onChange={e => setConfig({...config, host: e.target.value})} />
+          
+          <input type="text" placeholder="PORTA (ex: 465 ou 587)" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" 
+            value={config.port} onChange={e => setConfig({...config, port: e.target.value})} />
+          
+          <input type="email" placeholder="E-MAIL (USUÁRIO)" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" 
+            value={config.user} onChange={e => setConfig({...config, user: e.target.value})} />
+          
+          <input type="password" placeholder="SENHA DE APP" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" 
+            value={config.pass} onChange={e => setConfig({...config, pass: e.target.value})} />
         </div>
-        <div className="absolute -right-10 -bottom-10 opacity-5">
-           <Server size={200} />
-        </div>
+
+        <button 
+          onClick={testarSMTP}
+          disabled={loading}
+          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
+          Testar e Validar SMTP
+        </button>
+
+        {statusTeste && (
+          <div className={`p-4 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 border ${
+            statusTeste.tipo === 'sucesso' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'
+          }`}>
+            {statusTeste.tipo === 'sucesso' ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
+            {statusTeste.msg}
+          </div>
+        )}
       </div>
 
-      {/* CARD LOGS DE EVENTOS */}
-      <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 italic">Logs de Eventos Reais</h3>
-        <div className="bg-slate-50 rounded-[2rem] p-6 font-mono text-[10px] space-y-4 border border-slate-100 overflow-y-auto max-h-[300px]">
-          {dados.logs?.length > 0 ? (
-            dados.logs.map((log, idx) => (
-              <div key={idx} className="flex flex-wrap gap-4 border-b border-slate-200/50 pb-4 last:border-0 last:pb-0 items-center">
-                <span className="text-slate-400 font-bold">
-                  {log.data ? new Date(log.data).toLocaleString('pt-BR') : '---'}
-                </span>
-                <span className={log.status === 'OK' ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
-                  [{log.status || 'ERRO'}]
-                </span>
-                <span className="text-slate-700 font-bold flex-1 uppercase tracking-tight">
-                  {log.evento || 'Evento desconhecido'}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="text-slate-400 italic">Nenhum evento registrado ainda.</div>
-          )}
-        </div>
+      <div className="bg-slate-900 text-white p-10 rounded-[2.5rem] flex flex-col justify-center items-center text-center">
+        <Mail size={48} className="text-slate-700 mb-4" />
+        <p className="text-slate-400 text-xs font-medium max-w-xs">
+          O SMTP permite que o sistema envie relatórios automáticos e alertas de segurança diretamente para os gestores da Pillar IT.
+        </p>
       </div>
     </div>
   );
