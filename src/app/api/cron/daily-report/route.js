@@ -4,12 +4,11 @@ import prisma from '@/lib/prisma';
 
 export async function GET(request) {
   // Trava de segurança recomendada para produção
-/*
+
   const authHeader = request.headers.get('authorization');
   if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-*/
   try {
     const agora = new Date();
     const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
