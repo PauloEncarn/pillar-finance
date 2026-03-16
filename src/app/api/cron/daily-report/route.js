@@ -1,48 +1,65 @@
 import { NextResponse } from 'next/server';
 import { sendDailyReport } from '@/lib/email';
+import prisma from '@/lib/prisma'; // Importando seu Prisma
 
 export async function GET(request) {
-  // Segurança: Verifica se é o Vercel Cron que está chamando
-  // (O Vercel injeta esse header automaticamente)
+  // 1. Segurança: Trava para rodar apenas via Vercel Cron ou com Secret
   const authHeader = request.headers.get('authorization');
   if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    // ---------------------------------------------------------
-    // AQUI ENTRARIA A CONSULTA AO BANCO DE DADOS REAL
-    // Como estamos sem banco, vou simular dados para o teste
-    // ---------------------------------------------------------
-    const dadosDoBanco = [
-      { id: 1, descricao: 'Cliente A', valor: 5000, status: 'PAGO', tipo: 'ENTRADA' },
-      { id: 2, descricao: 'Servidor', valor: 200, status: 'PENDENTE', tipo: 'SAIDA' },
-      { id: 3, descricao: 'Internet', valor: 150, status: 'PENDENTE', tipo: 'SAIDA' },
-    ];
+    const agora = new Date();
+    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+    const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0);
 
-    // Processamento dos dados
-    const pagos = dadosDoBanco.filter(i => i.status === 'PAGO');
-    const pendentes = dadosDoBanco.filter(i => i.status === 'PENDENTE');
+    // 2. BUSCA REAL NO BANCO: Pega todos os lançamentos do mês atual
+    const lancamentos = await prisma.lancamento.findMany({
+      where: {
+        data: {
+          gte: inicioMes,
+          lte: fimMes,
+        },
+      },
+    });
+
+    // 3. PROCESSAMENTO DOS DADOS
+    const totalPago = lancamentos
+      .filter(i => i.status === 'PAGO' && i.tipo === 'ENTRADA')
+      .reduce((acc, i) => acc + Number(i.valor), 0);
+
+    const pendentes = lancamentos.filter(i => i.status !== 'PAGO');
+    
+    const totalPendente = pendentes.reduce((acc, i) => acc + Number(i.valor), 0);
 
     const formatMoney = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+    // 4. PREPARAÇÃO DO RELATÓRIO
     const dadosRelatorio = {
-      totalPago: formatMoney(pagos.reduce((acc, i) => acc + i.valor, 0)),
-      totalPendente: formatMoney(pendentes.reduce((acc, i) => acc + i.valor, 0)),
+      totalPago: formatMoney(totalPago),
+      totalPendente: formatMoney(totalPendente),
       itensPendentes: pendentes.map(i => ({
-        data: new Date().toLocaleDateString('pt-BR'), // Simulando data
-        descricao: i.descricao,
-        valor: formatMoney(i.valor)
+        data: new Date(i.data).toLocaleDateString('pt-BR'),
+        descricao: i.descricao.toUpperCase(),
+        valor: formatMoney(Number(i.valor))
       }))
     };
 
-    // Disparar E-mail
-    // Coloque seu e-mail pessoal aqui para testar por enquanto
-    await sendDailyReport('seu-email@exemplo.com', dadosRelatorio);
+    // 5. DISPARAR E-MAIL
+    // Puxa o e-mail de destino do .env para não ficar "hardcoded"
+    const emailDestino = process.env.EMAIL_DESTINO_RELATORIO || 'seu-email@exemplo.com';
+    
+    await sendDailyReport(emailDestino, dadosRelatorio);
 
-    return NextResponse.json({ success: true, message: 'Relatório enviado!' });
+    return NextResponse.json({ 
+      success: true, 
+      date: agora.toISOString(),
+      itemsFound: lancamentos.length 
+    });
+
   } catch (error) {
-    console.error('Erro no Cron:', error);
-    return NextResponse.json({ error: 'Falha interna' }, { status: 500 });
+    console.error('Erro no motor de Auditoria:', error);
+    return NextResponse.json({ error: 'Falha no processamento de dados' }, { status: 500 });
   }
 }
