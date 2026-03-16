@@ -6,7 +6,16 @@ export async function POST(request) {
   try {
     const { email, password } = await request.json();
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    // AJUSTE AQUI: Mudamos de findUnique para findFirst para usar 'insensitive'
+    // Isso permite que EXEMPLO@ e exemplo@ sejam o mesmo usuário no banco.
+    const user = await prisma.user.findFirst({ 
+      where: { 
+        email: {
+          equals: email,
+          mode: 'insensitive'
+        }
+      } 
+    });
 
     if (!user) {
       return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
@@ -16,7 +25,7 @@ export async function POST(request) {
     if (!user.approved) {
       return NextResponse.json({ 
         error: 'AGUARDE A APROVAÇÃO DE UM ADMINISTRADOR' 
-      }, { status: 403 }); // 403 = Proibido
+      }, { status: 403 }); 
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -37,6 +46,7 @@ export async function POST(request) {
     });
 
   } catch (error) {
+    console.error("Erro no login:", error);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
   }
 }
