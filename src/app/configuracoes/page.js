@@ -91,11 +91,11 @@ function TabButton({ id, label, icon: Icon, activeTab, setActiveTab }) {
   );
 }
 
+// ... (TabPerfil, TabSeguranca e TabAdminUsuarios permanecem iguais aos seus)
 function TabPerfil({ notify }) {
   const fileInputRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  
   const [user, setUser] = useState({ id: '', name: '', email: '', role: 'USER', avatarUrl: null });
 
   useEffect(() => {
@@ -217,7 +217,7 @@ function TabAdminUsuarios({ notify }) {
       setLoading(true);
       const res = await fetch('/api/admin/users');
       const data = await res.json();
-      setUsersList(data);
+      setUsersList(Array.isArray(data) ? data : []);
     } catch (e) { notify("Erro ao carregar lista", "erro"); } 
     finally { setLoading(false); }
   };
@@ -228,7 +228,6 @@ function TabAdminUsuarios({ notify }) {
     e.preventDefault();
     setLoading(true);
     try {
-      // Normalização: E-mail sempre em minúsculas e sem espaços antes de enviar para o banco
       const dadosNormalizados = {
         ...novoUser,
         email: novoUser.email.toLowerCase().trim()
@@ -284,7 +283,6 @@ function TabAdminUsuarios({ notify }) {
       </div>
 
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden animate-in fade-in">
-        {/* MODAL NOVO USUÁRIO */}
         {modalNovoUsuario && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95">
             <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100">
@@ -299,14 +297,7 @@ function TabAdminUsuarios({ notify }) {
                 </div>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                  <input 
-                    type="email" 
-                    required 
-                    placeholder="E-MAIL" 
-                    value={novoUser.email} 
-                    onChange={e => setNovoUser({...novoUser, email: e.target.value.toLowerCase()})} 
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-600" 
-                  />
+                  <input type="email" required placeholder="E-MAIL" value={novoUser.email} onChange={e => setNovoUser({...novoUser, email: e.target.value.toLowerCase()})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-600" />
                 </div>
                 <div className="relative">
                   <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
@@ -327,7 +318,6 @@ function TabAdminUsuarios({ notify }) {
           </div>
         )}
 
-        {/* MODAL DELETE */}
         {modalDelete.aberto && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
             <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100">
@@ -394,18 +384,28 @@ function TabAdminUsuarios({ notify }) {
   );
 }
 
+// ABA SISTEMA CORRIGIDA
 function TabSistemaSMTP() {
-  const [dados, setDados] = useState({ smtp: {}, logs: [] });
+  const [dados, setDados] = useState({ 
+    smtp: { host: '---', online: false }, 
+    logs: [] 
+  });
   const [loading, setLoading] = useState(true);
 
   const fetchSistema = async () => {
     try {
-      setLoading(false);
+      setLoading(true);
       const res = await fetch('/api/admin/sistema');
+      if (!res.ok) throw new Error("Erro na API");
       const data = await res.json();
-      setDados(data);
+      
+      // Garante que o estado receba um objeto válido mesmo se a API falhar
+      setDados({
+        smtp: data?.smtp || { host: '---', online: false },
+        logs: Array.isArray(data?.logs) ? data.logs : []
+      });
     } catch (e) {
-      console.error("Erro ao carregar sistema");
+      console.error("Erro ao carregar sistema:", e);
     } finally {
       setLoading(false);
     }
@@ -413,21 +413,33 @@ function TabSistemaSMTP() {
 
   useEffect(() => { fetchSistema(); }, []);
 
-  if (loading) return <div className="p-10 text-center uppercase font-black text-[10px] animate-pulse">Sincronizando Núcleo...</div>;
+  if (loading) return (
+    <div className="p-10 flex flex-col items-center justify-center gap-4">
+      <Loader2 className="animate-spin text-slate-300" size={32} />
+      <div className="uppercase font-black text-[10px] text-slate-400 tracking-widest">Sincronizando Núcleo...</div>
+    </div>
+  );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
+      {/* CARD STATUS SMTP */}
       <div className="bg-slate-900 text-white p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[250px]">
         <div className="z-10">
-           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-8 flex items-center gap-2 italic"><Server size={14} /> Núcleo SMTP</h3>
+           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-8 flex items-center gap-2 italic">
+             <Server size={14} /> Núcleo SMTP
+           </h3>
            <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10 w-fit">
-             <p className="text-[9px] text-slate-400 uppercase font-black mb-1">Status do Host: {dados.smtp.host}</p>
-             <div className={`font-black flex items-center gap-2 text-sm md:text-base ${dados.smtp.online ? 'text-emerald-400' : 'text-rose-400'}`}>
+             <p className="text-[9px] text-slate-400 uppercase font-black mb-1">
+               Status do Host: {dados.smtp?.host || '---'}
+             </p>
+             <div className={`font-black flex items-center gap-2 text-sm md:text-base ${dados.smtp?.online ? 'text-emerald-400' : 'text-rose-400'}`}>
                <div className="relative flex h-2.5 w-2.5">
-                 {dados.smtp.online && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dados.smtp.online ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500'}`}></span>
+                 {dados.smtp?.online && (
+                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                 )}
+                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dados.smtp?.online ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500'}`}></span>
                </div>
-               {dados.smtp.online ? 'CONECTADO / ONLINE' : 'DESCONECTADO / ERRO'}
+               {dados.smtp?.online ? 'CONECTADO / ONLINE' : 'DESCONECTADO / ERRO'}
              </div>
            </div>
         </div>
@@ -436,16 +448,25 @@ function TabSistemaSMTP() {
         </div>
       </div>
 
+      {/* CARD LOGS DE EVENTOS */}
       <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 italic">Logs de Eventos Reais</h3>
         <div className="bg-slate-50 rounded-[2rem] p-6 font-mono text-[10px] space-y-4 border border-slate-100 overflow-y-auto max-h-[300px]">
-          {dados.logs.length > 0 ? dados.logs.map(log => (
-            <div key={log.id} className="flex flex-wrap gap-4 border-b border-slate-200/50 pb-4 last:border-0 last:pb-0 items-center">
-              <span className="text-slate-400 font-bold">{new Date(log.data).toLocaleString('pt-BR')}</span>
-              <span className={log.status === 'OK' ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>[{log.status}]</span>
-              <span className="text-slate-700 font-bold flex-1 uppercase tracking-tight">{log.evento}</span>
-            </div>
-          )) : (
+          {dados.logs?.length > 0 ? (
+            dados.logs.map((log, idx) => (
+              <div key={idx} className="flex flex-wrap gap-4 border-b border-slate-200/50 pb-4 last:border-0 last:pb-0 items-center">
+                <span className="text-slate-400 font-bold">
+                  {log.data ? new Date(log.data).toLocaleString('pt-BR') : '---'}
+                </span>
+                <span className={log.status === 'OK' ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
+                  [{log.status || 'ERRO'}]
+                </span>
+                <span className="text-slate-700 font-bold flex-1 uppercase tracking-tight">
+                  {log.evento || 'Evento desconhecido'}
+                </span>
+              </div>
+            ))
+          ) : (
             <div className="text-slate-400 italic">Nenhum evento registrado ainda.</div>
           )}
         </div>
